@@ -12,9 +12,9 @@ TODO / PROBLEMS :
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.utils.microphone_array import MicArray
-from src.utils.grid import CircularGrid2D
-from src.utils.wave_reader import WaveProcessorSlidingWindow
+from microphone_array import MicArray
+from grid import CircularGrid2D
+from wave_reader import WaveProcessorSlidingWindow
 
 
 

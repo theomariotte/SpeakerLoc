@@ -13,22 +13,47 @@ from scipy.io import wavfile
 import IPython
 import sys
 import wave
+import scipy.signal as dsp
 
 #Dimensions de la salle + TR60 :
-
 rt60_tgt = 0.3  # en secondes
 room_dim = [4, 6]  # en mètres
-input_dir = "./input/"
-output_dir = "./output/"
+input_dir = "data/Synth_data/input/"
+output_dir = "data/Synth_data/output/"
+
+# choose a target sampling rate
+fs = 16000
+# number of sources
+nb_src = 4
+# microphone array properties
+nb_mic = 8
+radius = 100e-3
+# signal to noise ratio
+snr = 10.
+ref_mic_idx = 0
+# if True, add noise source in a corner of the room in addition to noise added by simulation
+noise_src_fl = False
+
+# overlap between signals
+overlap12 = 1.0
+overlap23 = 5.0
+overlap34 = 3.0
+
 
 # Importation des 4 signaux audios :
-# Ici, fs=48000 Hz. Pour les fichiers audios issus du corpus AMI, fs=16000 Hz
+fs_audio, audio1 = wavfile.read(f"{input_dir}is1000a_Headset 0_mono.wav")
+_, audio2 = wavfile.read(f"{input_dir}is1000a_Headset 1_mono.wav")
+_, audio3 = wavfile.read(f"{input_dir}is1000a_Headset 2_mono.wav")
+_, audio4 = wavfile.read(f"{input_dir}is1000a_Headset 3_mono.wav")
 
-fs, audio1 = wavfile.read(f"{input_dir}is1000a_Headset 0_mono.wav")
-fs, audio2 = wavfile.read(f"{input_dir}is1000a_Headset 1_mono.wav")
-fs, audio3 = wavfile.read(f"{input_dir}is1000a_Headset 2_mono.wav")
-fs, audio4 = wavfile.read(f"{input_dir}is1000a_Headset 3_mono.wav")
-fs, bruit = wavfile.read(f"{input_dir}bruit.wav")
+
+# adjust sampling rate if audio does not fit targeted one
+if fs_audio > fs:
+    audio1 = dsp.decimate(x=audio1,q=fs_audio//fs)
+    audio2 = dsp.decimate(x=audio2,q=fs_audio//fs)
+    audio3 = dsp.decimate(x=audio3,q=fs_audio//fs)
+    audio4 = dsp.decimate(x=audio4,q=fs_audio//fs)
+
 
 # Théorème de Sabine pour les paramètres de la méthode source-image :
 e_absorption, max_order = pra.inverse_sabine(rt60_tgt, room_dim)
@@ -40,25 +65,40 @@ room = pra.ShoeBox(room_dim,
                    max_order=max_order)
 
 # Placement des sources dans la salle (les sources sont juxtaposées à l'aide du paramètre Delay) :
+# adjust delay with respect to signal duration and overlap between sources
+start = 0.5
+room.add_source([1, 2], signal=audio1, delay=start)
+start += len(audio1)/fs - overlap12
+room.add_source([1, 4], signal=audio2, delay=start)
+start+= len(audio2)/fs - overlap23
+room.add_source([3, 2], signal=audio3, delay=start)
+start+=len(audio3)/fs - overlap34
+room.add_source([3, 4], signal=audio4, delay=start)
 
-room.add_source([1, 2], signal=audio1, delay=0.5)
-room.add_source([1, 4], signal=audio2, delay=5.5)
-room.add_source([3, 2], signal=audio3, delay=17)
-room.add_source([3, 4], signal=audio4, delay=24)
-# Ajout d'un bruit de fond, d'une durée égale à la somme des 4 audios précédents
-room.add_source([3.9, 5.9], signal=bruit[:(
-    len(audio1)+len(audio2)+len(audio3)+len(audio4))], delay=0.5)
+# for file naming and noise generation (if needed)
+total_duration = start+len(audio4)/fs
+ola_ratio = int(np.ceil((overlap12+overlap23+overlap34)/total_duration))
 
+# in case of noise source added
+if noise_src_fl:
+    # Ajout d'un bruit de fond, d'une durée égale à la somme des 4 audios précédents
+    fs_noise, bruit = wavfile.read(f"{input_dir}bruit.wav")
+    if fs_noise > fs:
+        bruit = dsp.decimate(x=bruit,
+                            q=fs_noise//fs)
+
+    noise_duration = np.ceil(total_duration*fs)
+    room.add_source([3.9, 5.9], signal=bruit[:noise_duration], delay=0.5)
+    nb_src+=1
 
 # Localisation/Création de l'antenne de micros :
-
 Lg_t = 0.100                # Largeur du filtre (en s)
 Lg = np.ceil(Lg_t*fs)       # en échantillons
 
 center = [2, 3]
-radius = 100e-3
 fft_len = 512
-echo = pra.circular_2D_array(center=center, M=8, phi0=0, radius=radius)
+#TODO (21/03/08) - seek why M=nb_mic-1 to get 8 microphones 
+echo = pra.circular_2D_array(center=center, M=nb_mic-1, phi0=0, radius=radius)
 echo = np.concatenate((echo, np.array(center, ndmin=2).T), axis=1)
 mics = pra.Beamformer(echo, room.fs, N=fft_len, Lg=Lg)
 
@@ -73,34 +113,34 @@ fig, ax = room.plot()
 
 # Graphiques Beamforming :
 
-room.mic_array.rake_delay_and_sum_weights(room.sources[0][:1])
+room.mic_array.rake_delay_and_sum_weights(room.sources[nb_src-nb_src][:1])
 fig, ax = room.plot(freq=[500, 1000, 2000, 4000, 8000], img_order=0)
 ax.legend(['500', '1000', '2000', '4000', '8000'])
 plt.title("Source 1")
-room.mic_array.rake_delay_and_sum_weights(room.sources[1][:1])
+room.mic_array.rake_delay_and_sum_weights(room.sources[nb_src-nb_src+1][:1])
 fig, ax = room.plot(freq=[500, 1000, 2000, 4000, 8000], img_order=0)
 ax.legend(['500', '1000', '2000', '4000', '8000'])
 plt.title("Source 2")
-room.mic_array.rake_delay_and_sum_weights(room.sources[2][:1])
+room.mic_array.rake_delay_and_sum_weights(room.sources[nb_src-nb_src+2][:1])
 fig, ax = room.plot(freq=[500, 1000, 2000, 4000, 8000], img_order=0)
 ax.legend(['500', '1000', '2000', '4000', '8000'])
 plt.title("Source 3")
-room.mic_array.rake_delay_and_sum_weights(room.sources[3][:1])
+room.mic_array.rake_delay_and_sum_weights(room.sources[nb_src-nb_src+3][:1])
 fig, ax = room.plot(freq=[500, 1000, 2000, 4000, 8000], img_order=0)
 ax.legend(['500', '1000', '2000', '4000', '8000'])
 plt.title("Source 4")
-room.mic_array.rake_delay_and_sum_weights(room.sources[4][:1])
-fig, ax = room.plot(freq=[500, 1000, 2000, 4000, 8000], img_order=0)
-ax.legend(['500', '1000', '2000', '4000', '8000'])
-plt.title("Source de bruit")
+if noise_src_fl:
+    room.mic_array.rake_delay_and_sum_weights(room.sources[nb_src-nb_src+4][:1])
+    fig, ax = room.plot(freq=[500, 1000, 2000, 4000, 8000], img_order=0)
+    ax.legend(['500', '1000', '2000', '4000', '8000'])
+    plt.title("Source de bruit")
 
 # Simulation (Construit la RIR automatiquement) :
 
-room.simulate()
+room.simulate(reference_mic=ref_mic_idx,snr=snr)
 
 # Enregistrement du ignal audio reçu par l'antenne :
-# Enregistrement du signal audio reçu par l'antenne :
-name = "IS1000a_TR{:d}".format(int(rt60_tgt*1e3))
+name = "IS1000a_TR{:d}_T{:d}_nch{:d}_ola{:d}".format(int(rt60_tgt*1e3),int(np.ceil(total_duration)),int(nb_mic),ola_ratio)
 room.mic_array.to_wav(
     f"{output_dir}{name}.wav",
     norm=True,
@@ -109,6 +149,12 @@ room.mic_array.to_wav(
 
 # Amélioration du résultat grâce au beamforming :
 signal_das = mics.process(FD=False)
+# Enregistrement du ignal audio reçu par l'antenne :
+name = "BF_IS1000a_TR{:d}_T{:d}_nch{:d}_ola{:d}".format(int(rt60_tgt*1e3),int(np.ceil(total_duration)),int(nb_mic),ola_ratio)
+wavfile.write(filename=f"{output_dir}{name}.wav",
+              rate=fs,
+              data=signal_das)
+
 print("DAS Beamformed Signal:")
 IPython.display.Audio(signal_das, rate=fs)
 
@@ -116,11 +162,6 @@ IPython.display.Audio(signal_das, rate=fs)
 
 # Permet d'afficher la matrice complète
 np.set_printoptions(threshold=sys.maxsize)
-
-# file = open("das.txt", "w") #Ouverture du fichier
-# file.write(str(signal_das)) #ecriture
-# file.close() #fermeture fichier
-
 
 # Caractéristiques du signal et récupération :
 
@@ -148,7 +189,7 @@ print("Le TR60 désiré est {}".format(rt60_tgt))  # TR60 choisi
 print("Le TR60 mesuré est {}".format(rt60[1, 0]))  # TR60 mesuré
 
 # Cohérence des signaux :
-
+"""
 plt.subplot(4, 2, 1)
 cor = plt.cohere(room.mic_array.signals[1, :], room.mic_array.signals[0, :])
 plt.title("Microphone 1")
@@ -222,3 +263,4 @@ plt.xlabel("Time [s]")
 
 plt.tight_layout()
 plt.show()
+"""
