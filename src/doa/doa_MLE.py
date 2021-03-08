@@ -12,9 +12,11 @@ TODO / PROBLEMS :
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ..utils.microphone_array import MicArray
-from ..utils.grid import CircularGrid2D
-from ..utils.wave_reader import WaveProcessorSlidingWindow
+from src.utils.microphone_array import MicArray
+from src.utils.grid import CircularGrid2D
+from src.utils.wave_reader import WaveProcessorSlidingWindow
+
+
 
 def singleNarrowBandSpectrum(frame,
                              rtf,
