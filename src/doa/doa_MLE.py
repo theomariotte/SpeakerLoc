@@ -7,83 +7,17 @@ This code estimates de DOA of multiple sound sources based on the method describ
 TODO:
         - Move doa estimation method into a class or another file reduce number of lines in main code
 """
+
+
+# Synthetic data
 import os
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-
 from microphone_array import MicArray
 from grid import CircularGrid2D
 from wave_reader import WaveProcessorSlidingWindow
-
-
-
-def singleNarrowBandSpectrum(frame,
-                             rtf,
-                             mic_array,
-                             grid,
-                             nb_freq,
-                             freq_index,
-                             fs):
-
-    z = frame[:,freq_index]
-    z = z[:,np.newaxis]
-    R = np.dot(z,z.conj().T)
-    B = mic_array.getSpatialCoherence(idx_freq=freq_index,
-                                      num_freq=nb_freq,
-                                      fs=fs,
-                                      mode="sinc")
-    
-    B_inv = np.linalg.inv(B)
-
-    mic_num = mic_array.micNumber()
-    src_num = grid.shape()[0]
-
-    log_spectrum = np.empty((src_num,))
-
-    for ii in range(src_num):
-
-        # RTF at the current frequency bin
-        d = rtf[ii,freq_index,:]
-        d = d[:,np.newaxis]
-
-        # projection of d whitened by B
-        proj_d = np.dot(d.conj().T,np.dot(B_inv,d))
-
-        # inverse
-        proj_d_inv = np.linalg.inv(proj_d) 
-
-        # pseudo inversion
-        db_inv = np.dot(proj_d_inv,np.dot(d.conj().T,B_inv))
-
-        # projection of d
-        P = np.dot(d,db_inv)
-
-        # orthogonal projection of d
-        P_orth = np.eye(mic_num) - P
-
-        # Variance of the noise
-        trace = np.trace(np.dot(P_orth,np.dot(R,B_inv)))
-        sigma_v2 = 1/(mic_num-1) * trace
-
-        # variance of the signal
-        tmp_ = R - sigma_v2*B
-        prod_ = np.dot(db_inv,np.dot(tmp_,db_inv.conj().T))
-        sigma_s2 = prod_[0][0].astype(float)
-
-        spectrum = np.dot(d,sigma_s2*d.conj().T) + sigma_v2 * B 
-        log_spectrum[ii] = np.log(np.linalg.det(spectrum))
-
-        # a posteriori SNR for confidence measure when weighting broadband histogram
-        Sigma_V = sigma_v2 * B
-        aSNR = np.dot(z.conj().T,z)/np.trace(Sigma_V).astype(float)
-
-
-    return 1./log_spectrum, aSNR[0][0]
-
-    
-
-# Synthetic data
+from doa_estimator import DoaMLE
 wav_dir = "./data/Synth_data/output/"
 audio_names = ["IS1000a_TR300_T21_nch8_ola1_noise0"]
 
@@ -97,14 +31,14 @@ sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
 
 
-
 # wavform framing parameters
 winlen = 1024
-winshift = winlen
+winshift = winlen//2
 
 # number of snapshots for doa estimation (i.e. number of frame)
 duration = 20.
-num_snapshot = int(duration*16000//winlen)
+num_snapshot = int(0.5*duration*16000//winlen)
+num_snapshot = 20
 
 
 sig.load(winlen=winlen, shift=winshift)
@@ -131,7 +65,7 @@ stop = 360.0-step
 r = 0.6
 nfft = winlen//2+1
 f_start_idx = 20
-ff = np.linspace(f_start_idx,winlen//2,nfft).astype(np.int32)
+ff = np.linspace(f_start_idx, winlen//2, nfft).astype(np.int32)
 
 grid = CircularGrid2D(theta_start=start,
                       theta_stop=stop,
@@ -144,20 +78,44 @@ rtf = grid.getRTF(freq=ff,
                   array=mic_array)
 coord = grid.components()
 theta = coord["theta"]
-theta*=180. / np.pi
+theta *= 180. / np.pi
 num_src = grid.shape()[0]
 
 
 # frequency band used for loaclization
 idx_fmin = 50
 idx_fmax = len(ff)-1
-freq_idx_vec = np.linspace(idx_fmin,idx_fmax,nfft-idx_fmin).astype(np.int32)
+freq_idx_vec = np.linspace(idx_fmin, idx_fmax, nfft-idx_fmin).astype(np.int32)
 nb_freq = len(freq_idx_vec)
 
 # threshold for confidence measure
 thres = 1.0
 
-#TODO (2021/03/04) Make WaveProcessor object iterable to load segments more  efficiently
+# doa estimator
+doaEngine = DoaMLE(microphone_array=mic_array,
+                   grid=grid,
+                   wave_reader=sig)
+
+
+nb_loop = int(num_frame//num_snapshot)
+for snp_idx in range(nb_loop):
+    idx_frame_start = 0 + snp_idx * num_snapshot
+    idx_frame_stop = idx_frame_start + num_snapshot
+    H = doaEngine.broadBandHistogram(idx_frame_start=idx_frame_start,
+                                     idx_frame_stop=idx_frame_stop,
+                                     freq=ff,
+                                     snr_thres=thres,
+                                     freq_idx_vec=freq_idx_vec)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    plt.plot(theta, H)
+    plt.xlabel("DOA [°]")
+    plt.ylabel("Likelihood")
+    plt.grid()
+    plt.show(block=True)
+
+"""
 snp_cnt = 0
 for idx in range(num_frame):
 
@@ -165,37 +123,28 @@ for idx in range(num_frame):
 
     xx, _ = sig.getAudioFrameSTFT(idx)
 
-    broad_band_spectrum = np.zeros((num_src-1,nb_freq))
+    broad_band_spectrum = np.zeros((num_src-1, nb_freq))
     conf_meas = np.zeros((nb_freq,))
 
     # Broad band histogram
     H = np.zeros((num_src,))
-    # association function
-    #X = np.zeros((num_src, nb_freq,num_snapshot)).astype(np.int32)
-    # confidence measure
-    #Q = np.zeros((nb_freq,num_snapshot))
-
     k = 0
 
     for f_idx in freq_idx_vec:
-        log_spectrum, snr = singleNarrowBandSpectrum(frame=xx,
-                                                rtf=rtf,
-                                                mic_array=mic_array,
-                                                grid=grid,
-                                                nb_freq=nb_freq,
-                                                freq_index=f_idx,
-                                                fs=fs)    
-        
+        log_spectrum, snr = doaEngine.singleNarrowBandSpectrum(frame=xx,
+                                                               rtf=rtf,
+                                                               nb_freq=nb_freq,
+                                                               freq_index=f_idx)
 
         #TODO (21/03/06) temporary remove first value -> problem here !
         log_spectrum = log_spectrum[1:]
 
-        # confiudence measure on DOA estimation 
+        # confiudence measure on DOA estimation
         idx_doa_NB = np.argmax(log_spectrum)
-        tmp_ = np.ma.array(log_spectrum,mask=False)
-        tmp_.mask[idx_doa_NB]=True
+        tmp_ = np.ma.array(log_spectrum, mask=False)
+        tmp_.mask[idx_doa_NB] = True
         qD = log_spectrum[idx_doa_NB] / tmp_.sum()
-        
+
         # confidence measure on SNR
         qSNR = int(snr > thres)
 
@@ -207,37 +156,7 @@ for idx in range(num_frame):
         # update histogram
         H += conf_meas[k] * X
 
-
-
         #print(f"Band {k} - aSNR = {snr} - qSNR = {qSNR} - qD = {qD}")
-        broad_band_spectrum[:,k] = log_spectrum
-        k+=1
-
-    
-    snp_cnt+=1
-    if snp_cnt == num_snapshot:
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        plt.plot(theta,H)
-        plt.xlabel("DOA [°]")
-        plt.ylabel("Likelihood")
-        plt.grid()
-        plt.show(block=True)
-        #plt.pause(2.)
-        #plt.close(fig)
-
-        H = np.zeros((num_src,))
-        snp_cnt = 0
-
-
-
-        
-
-        
-
-
-
-    
-
-    
+        broad_band_spectrum[:, k] = log_spectrum
+        k += 1
+"""

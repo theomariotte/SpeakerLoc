@@ -227,6 +227,9 @@ class WaveProcessorSlidingWindow(WaveProcessor):
     def frameNumber(self):
         return self.data_sw.shape[0]
 
+    def isLoad(self):
+        return self.isLoaded
+
 
     
 if __name__ == "__main__":

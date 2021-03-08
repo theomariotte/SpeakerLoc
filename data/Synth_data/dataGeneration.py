@@ -16,6 +16,9 @@ import os
 import wave
 import scipy.signal as dsp
 
+"""
+Parameters
+"""
 #Dimensions de la salle + TR60 :
 rt60_tgt = 0.3  # en secondes
 room_dim = [4, 6]  # en mètres
@@ -26,9 +29,15 @@ output_dir = "data/Synth_data/output/"
 fs = 16000
 # number of sources
 nb_src = 4
+
 # microphone array properties
 nb_mic = 8
 radius = 100e-3
+Lg_t = 0.100                # Largeur du filtre (en s)
+Lg = np.ceil(Lg_t*fs)       # en échantillons
+center = [2, 3]
+fft_len = 512
+
 # signal to noise ratio
 snr = 10.
 ref_mic_idx = 0
@@ -97,12 +106,6 @@ if noise_src_fl:
     room.add_source([3.9, 5.9], signal=bruit[:noise_duration], delay=0.5)
     nb_src+=1
 
-# Localisation/Création de l'antenne de micros :
-Lg_t = 0.100                # Largeur du filtre (en s)
-Lg = np.ceil(Lg_t*fs)       # en échantillons
-
-center = [2, 3]
-fft_len = 512
 
 # create microphone array
 micropnts = np.zeros((8, 2))
