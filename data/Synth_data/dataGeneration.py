@@ -12,6 +12,7 @@ import pyroomacoustics as pra
 from scipy.io import wavfile
 import IPython
 import sys
+import os
 import wave
 import scipy.signal as dsp
 
@@ -39,6 +40,11 @@ overlap12 = 1.0
 overlap23 = 5.0
 overlap34 = 3.0
 
+# check directories
+if not os.path.exists(input_dir):
+    os.mkdir(input_dir)
+if not os.path.exists(output_dir):
+    os.mkdir(output_dir)
 
 # Importation des 4 signaux audios :
 fs_audio, audio1 = wavfile.read(f"{input_dir}is1000a_Headset 0_mono.wav")
