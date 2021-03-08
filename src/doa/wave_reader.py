@@ -78,9 +78,7 @@ class WaveProcessor:
             fname = f"{self.wav_dir}{self.audio_names[0]}.wav"
             nfo = soundfile.info(fname)
             audio, fs = soundfile.read(fname)
-            #TODO (21/03/07) removing last chanel only for pytoom simulation !!! TO BE CHANGED !!!
-            audio = audio[:,:-1]
-            self.nCh = nfo.channels - 1
+            self.nCh = nfo.channels
 
         self.fs = fs
         self.data = audio
@@ -159,26 +157,6 @@ class WaveProcessorSlidingWindow(WaveProcessor):
 
         :param winlen: length of the window in samples (default : 16000)
         :param shift: shift of the window in samples (default : 16000 - No overlap)
-        """
-        #TODO (21/03/07) - We can aboid re-writing these lines by calling base class method WaveReader.load()
-        # case of one channel per file
-        """
-        if len(self.audio_names) > 1:
-            audio = []
-            for name in self.audio_names:
-                fname = f"{self.wav_dir}{name}.wav"
-                tmp_,fs = soundfile.read(fname)
-                audio.append(tmp_)
-            audio = np.array(audio,dtype="float64").T
-            self.nCh = len(self.audio_names)
-        # case of multichannel audio file
-        else:
-            fname = f"{self.wav_dir}{self.audio_names[0]}.wav"
-            nfo = soundfile.info(fname)
-            audio, fs = soundfile.read(fname)
-            #TODO (21/03/07) removing last chanel only for pytoom simulation !!! TO BE CHANGED !!!
-            audio = audio[:,:-1]
-            self.nCh = nfo.channels - 1
         """
 
         WaveProcessor.load(self)

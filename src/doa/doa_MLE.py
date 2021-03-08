@@ -4,11 +4,11 @@ This code estimates de DOA of multiple sound sources based on the method describ
 """
 
 """
-TODO / PROBLEMS :
-        - Pyroom signals are sammpled at 48k -> not good since AMI is sampled at 16k
+TODO:
         - Move doa estimation method into a class or another file reduce number of lines in main code
-        - Check pyroom simulation since the number of channels does not fit + mic coordinates
 """
+import os
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -84,8 +84,8 @@ def singleNarrowBandSpectrum(frame,
     
 
 # Synthetic data
-wav_dir = "../../03_DATA/Synth_data/output/"
-audio_names = ["IS1000a_TR300"]
+wav_dir = "./data/Synth_data/output/"
+audio_names = ["IS1000a_TR300_T21_nch8_ola1_noise0"]
 
 # real data from AMi corpus
 #wav_dir = "../../03_DATA/AMI/"
@@ -97,16 +97,17 @@ sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
 
 
+
 # wavform framing parameters
 winlen = 1024
 winshift = winlen
 
 # number of snapshots for doa estimation (i.e. number of frame)
-num_snapshot = 5
+duration = 20.
+num_snapshot = int(duration*16000//winlen)
 
 
 sig.load(winlen=winlen, shift=winshift)
-
 fs = sig.getFs()
 num_frame = sig.frameNumber()
 
@@ -159,6 +160,8 @@ thres = 1.0
 #TODO (2021/03/04) Make WaveProcessor object iterable to load segments more  efficiently
 snp_cnt = 0
 for idx in range(num_frame):
+
+    logging.critical(f"Process frame {idx}/{num_snapshot}")
 
     xx, _ = sig.getAudioFrameSTFT(idx)
 
@@ -220,9 +223,9 @@ for idx in range(num_frame):
         plt.xlabel("DOA [°]")
         plt.ylabel("Likelihood")
         plt.grid()
-        plt.show(block=False)
-        plt.pause(2.)
-        plt.close(fig)
+        plt.show(block=True)
+        #plt.pause(2.)
+        #plt.close(fig)
 
         H = np.zeros((num_src,))
         snp_cnt = 0
