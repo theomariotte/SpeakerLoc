@@ -32,7 +32,7 @@ radius = 100e-3
 snr = 10.
 ref_mic_idx = 0
 # if True, add noise source in a corner of the room in addition to noise added by simulation
-noise_src_fl = False
+noise_src_fl = True
 
 # overlap between signals
 overlap12 = 1.0
@@ -87,7 +87,7 @@ if noise_src_fl:
         bruit = dsp.decimate(x=bruit,
                             q=fs_noise//fs)
 
-    noise_duration = np.ceil(total_duration*fs)
+    noise_duration = int(np.ceil(total_duration*fs))
     room.add_source([3.9, 5.9], signal=bruit[:noise_duration], delay=0.5)
     nb_src+=1
 
@@ -97,11 +97,27 @@ Lg = np.ceil(Lg_t*fs)       # en échantillons
 
 center = [2, 3]
 fft_len = 512
+
+# create microphone array
+micropnts = np.zeros((8, 2))
+micropnts[0, :] = np.array([-0.1, 0])
+micropnts[1, :] = np.array([-0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
+micropnts[2, :] = np.array([0, -0.1])
+micropnts[3, :] = np.array([0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
+micropnts[4, :] = np.array([0.1, 0])
+micropnts[5, :] = np.array([0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
+micropnts[6, :] = np.array([0, 0.1])
+micropnts[7, :] = np.array([-0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
+micropnts += center
+
+mics = pra.beamforming.Beamformer(np.array(micropnts).T, fs, N=fft_len, Lg=Lg, hop=None)
+
+"""
 #TODO (21/03/08) - seek why M=nb_mic-1 to get 8 microphones 
 echo = pra.circular_2D_array(center=center, M=nb_mic-1, phi0=0, radius=radius)
 echo = np.concatenate((echo, np.array(center, ndmin=2).T), axis=1)
 mics = pra.Beamformer(echo, room.fs, N=fft_len, Lg=Lg)
-
+"""
 
 # Placement de l'antenne :
 
@@ -135,22 +151,22 @@ if noise_src_fl:
     ax.legend(['500', '1000', '2000', '4000', '8000'])
     plt.title("Source de bruit")
 
+plt.show()
 # Simulation (Construit la RIR automatiquement) :
 
 room.simulate(reference_mic=ref_mic_idx,snr=snr)
 
 # Enregistrement du ignal audio reçu par l'antenne :
-name = "IS1000a_TR{:d}_T{:d}_nch{:d}_ola{:d}".format(int(rt60_tgt*1e3),int(np.ceil(total_duration)),int(nb_mic),ola_ratio)
+name = "IS1000a_TR{:d}_T{:d}_nch{:d}_ola{:d}_noise{:d}".format(int(rt60_tgt*1e3),int(np.ceil(total_duration)),int(nb_mic),ola_ratio,int(noise_src_fl))
 room.mic_array.to_wav(
     f"{output_dir}{name}.wav",
     norm=True,
-    bitdepth=np.int16,
-)
+    bitdepth=np.int16)
 
 # Amélioration du résultat grâce au beamforming :
 signal_das = mics.process(FD=False)
 # Enregistrement du ignal audio reçu par l'antenne :
-name = "BF_IS1000a_TR{:d}_T{:d}_nch{:d}_ola{:d}".format(int(rt60_tgt*1e3),int(np.ceil(total_duration)),int(nb_mic),ola_ratio)
+name = "BF_IS1000a_TR{:d}_T{:d}_nch{:d}_ola{:d}_noise{:d}".format(int(rt60_tgt*1e3),int(np.ceil(total_duration)),int(nb_mic),ola_ratio,int(noise_src_fl))
 wavfile.write(filename=f"{output_dir}{name}.wav",
               rate=fs,
               data=signal_das)
