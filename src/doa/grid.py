@@ -1,8 +1,28 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 from typing import Optional
 from microphone_array import MicArray
+class Grid2D:
 
+    def __init__(self,
+                 x_loc,
+                 y_loc):
+
+        self.X,self.Y = np.meshgrid(x_loc,y_loc)
+
+    def display(self,
+                block=True,
+                plt_duration=2.0):
+        fig = plt.figure()
+        ax = plt.plot(self.X,self.Y,'bo')
+        plt.xlabel("x [m]")
+        plt.ylabel("y [m]")
+        plt.title("Sources grid")
+        plt.show(block=block)
+        if not block:
+            plt.pause(plt_duration)
+            plt.close(fig=fig)
 
 class CircularGrid2D:
 
@@ -14,18 +34,19 @@ class CircularGrid2D:
 
         super().__init__()
 
-        # convert angles to radians
-        theta_start *= np.pi/180.
-        theta_stop *= np.pi/180.
-        theta_step *= np.pi/180.
+        theta = np.array(range(int(theta_start),int(theta_stop),int(theta_step)))
 
-        N = int(round((theta_stop-theta_start)/theta_step, 0))
-        self.theta = np.linspace(theta_start, theta_stop, N)
-        self.src_num = N
+        self.theta = (theta * np.pi/180.0).astype(np.float)
+        self.src_num = theta.shape[0]
+        
         if radius > 0:
             self.radius = radius
         else:
             raise Exception("Radius should be positive !")
+
+        # cartesian coordinates
+        self.X = self.radius * np.cos(self.theta)
+        self.Y = self.radius * np.sin(self.theta)
 
     def getTDOA(self,
                 mic_array,
@@ -47,11 +68,12 @@ class CircularGrid2D:
 
         # distance between reference mic and others in the array
         dist = mic_array.getDistance(ref_mic_idx)
-
+    
         # compute TDOA for each microphone
-        tdoa = np.matmul(dist[:, np.newaxis], self.theta[:, np.newaxis].T).T
+        tdoa = dist[:, np.newaxis] * np.cos(self.theta[:,np.newaxis].T) / c0 
+        #tdoa = np.matmul(dist[:, np.newaxis], self.theta[:, np.newaxis].T).T
 
-        return tdoa
+        return tdoa.T
 
     def getRTF(self,
                freq,
@@ -105,9 +127,10 @@ class CircularGrid2D:
 
 
 if __name__ == "__main__":
-    start = 0.0
-    step = 5.0
-    stop = 360.0-step
+
+    start = 0
+    step = 5
+    stop = 360
     r = 0.6
     fs = 16e3
     Nf = 128
@@ -122,10 +145,27 @@ if __name__ == "__main__":
     y_vec = np.array([1., 0., -1., 0.])
     z_vec = np.zeros(4)
 
-    arr = MicArray(x_vec, y_vec, z_vec)
+    mics = np.array([x_vec,y_vec,z_vec]).T
+    arr = MicArray(mics)
+
+    tdoa = grid.getTDOA(mic_array=arr)
+
     rtf = grid.getRTF(freq=ff,
                       fs=fs,
                       array=arr)
+    tmp = grid.components()
+    theta = tmp["theta"] * 180./np.pi
+    T,F = np.meshgrid(theta,ff) 
+
+    for i in range(rtf.shape[2]):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        #ax.set_ylim(0,Ly)
+        plt.pcolor(T.T,F.T,np.angle(rtf[:,:,i]),cmap="winter",shading="auto")
+        plt.xlabel("DOA [°]")
+        plt.ylabel("RTF phase (wrapped)")
+        plt.show()
+
 
     print(rtf)
     print(rtf.shape)

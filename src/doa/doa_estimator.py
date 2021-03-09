@@ -116,14 +116,9 @@ class DoaMLE(DoaBase):
             d = rtf[ii, freq_index, :]
             d = d[:, np.newaxis]
 
-            # projection of d whitened by B
-            proj_d = np.dot(d.conj().T, np.dot(B_inv, d))
-
-            # inverse
-            proj_d_inv = np.linalg.inv(proj_d)
-
-            # pseudo inversion
-            db_inv = np.dot(proj_d_inv, np.dot(d.conj().T, B_inv))
+            #pseudo inverse of d
+            d_inv = np.linalg.pinv(d)
+            db_inv = np.dot(d_inv,B_inv)
 
             # projection of d
             P = np.dot(d, db_inv)

@@ -27,6 +27,9 @@ audio_names = ["IS1000a_TR300_T21_nch8_ola1_noise0"]
 #for i in range(8):
 #    audio_names.append(f"IS1000a.Array1-0{i+1}")
 
+# True DOAs
+doa_ref = [45.,135.,225.,315.]
+
 sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
 
@@ -38,7 +41,7 @@ winshift = winlen//2
 # number of snapshots for doa estimation (i.e. number of frame)
 duration = 20.
 num_snapshot = int(0.5*duration*16000//winlen)
-num_snapshot = 20
+num_snapshot = 30
 
 
 sig.load(winlen=winlen, shift=winshift)
@@ -107,9 +110,14 @@ for snp_idx in range(nb_loop):
                                      snr_thres=thres,
                                      freq_idx_vec=freq_idx_vec)
 
+    ref_src1 = [doa_ref[0],doa_ref[0]]
+    ref_src2 = [doa_ref[1],doa_ref[1]]
+    ref_src3 = [doa_ref[2],doa_ref[2]]
+    ref_src4 = [doa_ref[3],doa_ref[3]]
+    
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    plt.plot(theta, H)
+    plt.plot(theta, H,ref_src1,[0,50],"k--",ref_src2,[0,50],"k--",ref_src3,[0,50],"k--",ref_src4,[0,50],"k--")
     plt.xlabel("DOA [°]")
     plt.ylabel("Likelihood")
     plt.grid()
