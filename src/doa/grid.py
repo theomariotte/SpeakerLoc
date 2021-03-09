@@ -125,6 +125,11 @@ class CircularGrid2D:
         """
         return {"radius": np.zeros(self.theta.shape) + self.radius, "theta": self.theta}
 
+    def numel(self):
+        """
+        Returns the number of sources in the grid
+        """
+        return self.theta.shape[0]
 
 if __name__ == "__main__":
 

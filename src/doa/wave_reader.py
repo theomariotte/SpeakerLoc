@@ -4,6 +4,7 @@ import copy
 
 from typing import Optional
 
+
 def framing(sig, win_size, win_shift=1, context=(0, 0), pad='zeros'):
     """
     :param sig: input signal, can be mono or multi dimensional
@@ -18,22 +19,25 @@ def framing(sig, win_size, win_shift=1, context=(0, 0), pad='zeros'):
         sig = sig[:, np.newaxis]
 
     data = copy.deepcopy(sig)
-    data = data[: ((data.shape[0] - win_size) // win_shift) * win_shift + win_size, :]
+    data = data[: ((data.shape[0] - win_size) // win_shift)
+                * win_shift + win_size, :]
 
     # Manage padding
     c = (context, ) + (sig.ndim - 1) * ((0, 0), )
     _win_size = win_size + sum(context)
-    shape = (int((sig.shape[0] - win_size) / win_shift) + 1, 1, _win_size, sig.shape[1])
-    strides = tuple(map(lambda x: x * dsize, [win_shift * sig.shape[1], 1, sig.shape[1], 1]))
+    shape = (int((sig.shape[0] - win_size) /
+                 win_shift) + 1, 1, _win_size, sig.shape[1])
+    strides = tuple(
+        map(lambda x: x * dsize, [win_shift * sig.shape[1], 1, sig.shape[1], 1]))
     print(f"strides = {strides}")
     if pad == 'zeros':
         return np.lib.stride_tricks.as_strided(np.lib.pad(sig, c, 'constant', constant_values=(0,)),
-                                                  shape=shape,
-                                                  strides=strides).squeeze()
+                                               shape=shape,
+                                               strides=strides).squeeze()
     elif pad == 'edge':
         return np.lib.stride_tricks.as_strided(np.lib.pad(data, c, 'edge'),
-                                                  shape=shape,
-                                                  strides=strides).squeeze()
+                                               shape=shape,
+                                               strides=strides).squeeze()
 
 
 class WaveProcessor:
@@ -58,20 +62,19 @@ class WaveProcessor:
         self.wav_dir = wav_dir
         self.audio_names = audio_names
         self.isLoaded = False
- 
 
     def load(self):
         """
         Load audio file from file names
-        """       
+        """
         # case of one channel per file
         if len(self.audio_names) > 1:
             audio = []
             for name in self.audio_names:
                 fname = f"{self.wav_dir}{name}.wav"
-                tmp_,fs = soundfile.read(fname)
+                tmp_, fs = soundfile.read(fname)
                 audio.append(tmp_)
-            audio = np.array(audio,dtype="float64").T
+            audio = np.array(audio, dtype="float64").T
             self.nCh = len(self.audio_names)
         # case of multichannel audio file
         else:
@@ -83,7 +86,7 @@ class WaveProcessor:
         self.fs = fs
         self.data = audio
         self.isLoaded = True
-        
+
     def getAudio(self):
         """
         Returns the entire audio signal as a np array and sampling rate.
@@ -93,7 +96,6 @@ class WaveProcessor:
             self.load()
 
         return self.data, self.fs
-
 
     def getAudioFrame(self,
                       start,
@@ -106,9 +108,8 @@ class WaveProcessor:
         """
         if not self.isLoaded:
             self.load()
-            
-        return self.data[:,int(np.ceil(start*self.fs)):int(np.ceil(stop*self.fs))]
 
+        return self.data[:, int(np.ceil(start*self.fs)):int(np.ceil(stop*self.fs))]
 
     def getAudioFrameSTFT(self,
                           start,
@@ -121,21 +122,22 @@ class WaveProcessor:
         :param stop: stop time (in sec)
         :param nfft: number of samples for FFT calculation (if None, the length of the frame will be used)
         """
-        
-        frame = self.getAudioFrame(start,stop)
+
+        frame = self.getAudioFrame(start, stop)
         N = frame.shape[1]
         if nfft is not None:
             if nfft >= N:
-                zp = np.zeros((self.nCh,nfft-N))
-                frame = np.hstack((frame,zp))
+                zp = np.zeros((self.nCh, nfft-N))
+                frame = np.hstack((frame, zp))
             elif nfft < N:
-                nfft=N
-                raise Warning("NFFT is smaller than frame size. Set NFFT to frame.shape[1]")
+                nfft = N
+                raise Warning(
+                    "NFFT is smaller than frame size. Set NFFT to frame.shape[1]")
         else:
-            nfft=N
-        
-        stft = np.fft.fft(frame,axis=1)
-        freq = np.linspace(0,self.fs/2,nfft)
+            nfft = N
+
+        stft = np.fft.fft(frame, axis=1)
+        freq = np.linspace(0, self.fs/2, nfft)
 
         return stft, freq
 
@@ -143,12 +145,12 @@ class WaveProcessor:
         return self.fs
 
 
-
 class WaveProcessorSlidingWindow(WaveProcessor):
     """
     Process audio file by exracting sliding windows
     The load method from WaveProcessor is overridden to allow windows extractions
     """
+
     def load(self,
              winlen: Optional[int] = 16000,
              shift: Optional[int] = 16000):
@@ -162,13 +164,13 @@ class WaveProcessorSlidingWindow(WaveProcessor):
         WaveProcessor.load(self)
 
         tmp_ = framing(sig=self.data,
-                      win_size=winlen,
-                      win_shift=shift)
+                       win_size=winlen,
+                       win_shift=shift)
 
         self.data_sw = tmp_
         #self.fs = fs
         #self.isLoaded = True
-    
+
     def getAudio(self):
         """
         Return audio file as a 3-d numpy array (num channel x winlen x num win)
@@ -176,11 +178,10 @@ class WaveProcessorSlidingWindow(WaveProcessor):
         if not self.isLoaded:
             self.load()
             raise Warning("Sliding window computed with default parameters !")
-        
+
         return self.data_sw
 
-
-    def getAudioFrame(self,index):
+    def getAudioFrame(self, index):
         """
         Return a given frame from extracted sliding windows 
 
@@ -188,13 +189,13 @@ class WaveProcessorSlidingWindow(WaveProcessor):
         """
 
         if not self.isLoaded:
-                    self.load()
-                    raise Warning("Sliding window computed with default parameters !")
-        
-        return self.data_sw[index,:,:].T
-        
+            self.load()
+            raise Warning(
+                "Sliding window computed with default parameters !")
 
-    def getAudioFrameSTFT(self,index,nfft: Optional[None]=None ):
+        return self.data_sw[index, :, :].T
+
+    def getAudioFrameSTFT(self, index, nfft: Optional[None] = None):
         """
         Return a given frame in the STFT domain
 
@@ -203,26 +204,28 @@ class WaveProcessorSlidingWindow(WaveProcessor):
         """
 
         if not self.isLoaded:
-                    self.load()
-                    raise Warning("Sliding window computed with default parameters !")
+            self.load()
+            raise Warning(
+                "Sliding window computed with default parameters !")
 
         frame = self.getAudioFrame(index=index)
         N = frame.shape[1]
         if nfft is not None:
             if nfft > N:
-                zp = np.zeros((self.nCh,nfft-N))
-                frame = np.hstack((frame,zp))
+                zp = np.zeros((self.nCh, nfft-N))
+                frame = np.hstack((frame, zp))
             elif nfft < N:
-                nfft=N
-                print("WARNING : NFFT is smaller than frame size. Set NFFT to frame.shape[1]")
+                nfft = N
+                print(
+                    "WARNING : NFFT is smaller than frame size. Set NFFT to frame.shape[1]")
             else:
-                nfft=N
+                nfft = N
         else:
-            nfft=N
-        
-        stft = np.fft.fft(frame,axis=1)
+            nfft = N
 
-        return stft[:,0:nfft//2+1], nfft
+        stft = np.fft.fft(frame, axis=1)
+
+        return stft[:, 0:nfft//2+1], nfft
 
     def frameNumber(self):
         return self.data_sw.shape[0]
@@ -230,45 +233,42 @@ class WaveProcessorSlidingWindow(WaveProcessor):
     def isLoad(self):
         return self.isLoaded
 
+    def numel(self):
+        return self.data_sw.shape[0]
 
-    
+
 if __name__ == "__main__":
     wav_dir = "../../03_DATA/AMI/"
     audio_names = []
     for i in range(8):
         audio_names.append(f"IS1000a.Array1-0{i+1}")
-    
+
     proc = WaveProcessor(wav_dir=wav_dir,
                          audio_names=audio_names)
 
     audio, fs = proc.getAudio()
-    frame = proc.getAudioFrame(2.0,2.005)
+    frame = proc.getAudioFrame(2.0, 2.005)
     nfft = 1024
-    stft, freq = proc.getAudioFrameSTFT(0,128./16000.,nfft=nfft)
+    stft, freq = proc.getAudioFrameSTFT(0, 128./16000., nfft=nfft)
 
     print(audio_names)
     print(audio.shape)
     print(frame.shape)
     print(stft.shape)
 
-    
     proc2 = WaveProcessorSlidingWindow(wav_dir=wav_dir,
-                                      audio_names=audio_names)
-
-
+                                       audio_names=audio_names)
 
     winlen = 2048
     winshift = 1024
     index = 10
 
-    proc2.load(winlen=winlen,shift=winshift)
+    proc2.load(winlen=winlen, shift=winshift)
 
     fs = proc2.getFs()
     audio = proc2.getAudio()
     frame = proc2.getAudioFrame(index)
     stft, freq = proc2.getAudioFrameSTFT(index)
-
-
 
     print(audio_names)
     print(audio.shape)

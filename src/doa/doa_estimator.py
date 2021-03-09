@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 
+from typing import Optional
 from wave_reader import WaveProcessorSlidingWindow
 from microphone_array import MicArray
 from grid import CircularGrid2D
@@ -143,3 +144,51 @@ class DoaMLE(DoaBase):
             aSNR = np.dot(z.conj().T, z)/np.trace(Sigma_V).astype(float)
 
         return 1./log_spectrum, aSNR[0][0]
+
+class DoaDelayAndSumBeamforming(DoaBase):
+
+    def energyMap(self,
+                    idx_frame,
+                    Nb: Optional[int]=1024,
+                    ref_index: Optional[int]=0,
+                    c0: Optional[float]=343.0):
+
+        M = self.micArray.micNumber()
+        Np =  self.grid.numel()
+        frame = self.waveProc.getAudioFrame(index=idx_frame)
+
+        if  frame.shape[1] == M:
+            frame = frame.T
+
+        tdoa = self.grid.getTDOA(mic_array=self.micArray,
+                                 ref_mic_idx=ref_index,
+                                 c0=c0)
+
+        decalage = int(np.ceil(np.max(np.max(tdoa)) * self.fs) + 1)
+        
+        
+        # Initialize output signals
+        # Signaux décalés correspondant à chaque micro
+        signaux_avances = np.zeros((M, Nb))
+        # Signaux en sortie de formation de voies
+        signaux_sortie = np.zeros((Np, Nb))
+        t2fin = Nb + 2 * decalage
+        t = np.arange(frame.shape[1]) / self.fs  # a verifier
+        t2 = t[:t2fin]
+        ii=0
+        for delay_set in tdoa:
+            jj=0
+            for delay in delay_set:
+                t_dec = t2 + delay
+                t_dec = t_dec[decalage: -1]
+                signaux_temp = np.interp(t_dec, t2, frame[jj, :t2fin])
+                signaux_avances[jj, :] = signaux_temp[:Nb]
+                signaux_sortie[ii, :] = np.mean(signaux_avances, 0)
+                jj+=1
+            ii+=1
+        Energie = sum((signaux_sortie**2).T)
+        #Energie = np.resize(Energie,new_shape=(Nx, Ny))
+        return Energie        
+
+
+

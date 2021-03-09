@@ -3,11 +3,6 @@ This code estimates de DOA of multiple sound sources based on the method describ
 [1] MAXIMUM LIKELIHOOD MULTI-SPEAKER DIRECTION OF ARRIVAL ESTIMATION UTILIZING A WEIGHTED HISTOGRAM, Hadad et Gannot (2020)
 """
 
-"""
-TODO:
-        - Move doa estimation method into a class or another file reduce number of lines in main code
-"""
-
 
 # Synthetic data
 import os
@@ -18,8 +13,10 @@ from microphone_array import MicArray
 from grid import CircularGrid2D
 from wave_reader import WaveProcessorSlidingWindow
 from doa_estimator import DoaMLE
+from doa_estimator import DoaDelayAndSumBeamforming
+
 wav_dir = "./data/Synth_data/output/"
-audio_names = ["IS1000a_TR300_T21_nch8_ola1_noise0"]
+audio_names = ["IS1000a_TR300_T31_nch8_ola1_noise0"]
 
 # real data from AMi corpus
 #wav_dir = "../../03_DATA/AMI/"
@@ -35,13 +32,13 @@ sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
 
 
 # wavform framing parameters
-winlen = 1024
+winlen = 16000
 winshift = winlen//2
 
 # number of snapshots for doa estimation (i.e. number of frame)
 duration = 20.
 num_snapshot = int(0.5*duration*16000//winlen)
-num_snapshot = 30
+#num_snapshot = 20
 
 
 sig.load(winlen=winlen, shift=winshift)
@@ -85,11 +82,31 @@ theta *= 180. / np.pi
 num_src = grid.shape()[0]
 
 
+# baseline beamforming
+doaBaseline = DoaDelayAndSumBeamforming(microphone_array=mic_array,
+                                        grid=grid,
+                                        wave_reader=sig)
+
+for idx in range(sig.numel()):
+    doaMap = doaBaseline.energyMap (idx_frame=idx)
+
+
+    fig = plt.figure()
+    plt.plot(theta,doaMap)
+    plt.xlabel("DOA [°]")
+    plt.ylabel("power")
+    plt.show(block=False)
+    plt.pause(1.0)
+    plt.close(fig)
+
 # frequency band used for loaclization
 idx_fmin = 50
 idx_fmax = len(ff)-1
 freq_idx_vec = np.linspace(idx_fmin, idx_fmax, nfft-idx_fmin).astype(np.int32)
 nb_freq = len(freq_idx_vec)
+
+
+
 
 # threshold for confidence measure
 thres = 1.0
@@ -122,49 +139,3 @@ for snp_idx in range(nb_loop):
     plt.ylabel("Likelihood")
     plt.grid()
     plt.show(block=True)
-
-"""
-snp_cnt = 0
-for idx in range(num_frame):
-
-    logging.critical(f"Process frame {idx}/{num_snapshot}")
-
-    xx, _ = sig.getAudioFrameSTFT(idx)
-
-    broad_band_spectrum = np.zeros((num_src-1, nb_freq))
-    conf_meas = np.zeros((nb_freq,))
-
-    # Broad band histogram
-    H = np.zeros((num_src,))
-    k = 0
-
-    for f_idx in freq_idx_vec:
-        log_spectrum, snr = doaEngine.singleNarrowBandSpectrum(frame=xx,
-                                                               rtf=rtf,
-                                                               nb_freq=nb_freq,
-                                                               freq_index=f_idx)
-
-        #TODO (21/03/06) temporary remove first value -> problem here !
-        log_spectrum = log_spectrum[1:]
-
-        # confiudence measure on DOA estimation
-        idx_doa_NB = np.argmax(log_spectrum)
-        tmp_ = np.ma.array(log_spectrum, mask=False)
-        tmp_.mask[idx_doa_NB] = True
-        qD = log_spectrum[idx_doa_NB] / tmp_.sum()
-
-        # confidence measure on SNR
-        qSNR = int(snr > thres)
-
-        # overall confidence measure (cf. Hadad et Gannot 2020)
-        conf_meas[k] = qD * qSNR
-        X = np.zeros((num_src,))
-        X[idx_doa_NB] = 1
-
-        # update histogram
-        H += conf_meas[k] * X
-
-        #print(f"Band {k} - aSNR = {snr} - qSNR = {qSNR} - qD = {qD}")
-        broad_band_spectrum[:, k] = log_spectrum
-        k += 1
-"""

@@ -21,7 +21,7 @@ class MicArray:
         self.y = micropnts[:,1]
         self.z = micropnts[:,2]
     
-    def getDistance(self,ref_mic_idx):
+    def getDistance(self,ref_mic_idx: Optional[int]=0):
         """
         Returns the distance between each microphone and the reference one
         """
@@ -47,6 +47,28 @@ class MicArray:
         Returns the number of microphones in the array
         """
         return self.x.shape[0]
+
+    def getInterMicDelay(self,
+                         fs,
+                         ref_mic_idx: Optional[int]=0,
+                         c0: Optional[float]=343.0):
+        """
+        Computes delay between reference microphone and others
+
+        :param ref_mic_idx: index of the reference microphone (default 0)
+        :param fs: sampling rate [Hz]
+        :param c0: speed of sound [m/s] (default : c0=343.0 m/s)
+        """
+
+        if ref_mic_idx >= self.micNumber():
+            ref_mic_idx = self.micNumber() - 1
+        
+        dist = self.getDistance(ref_mic_idx=ref_mic_idx)
+        tdoa = dist / c0
+
+        return tdoa
+
+
 
     def getSpatialCoherence(self,
                             idx_freq, 
