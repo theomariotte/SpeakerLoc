@@ -123,7 +123,7 @@ class CircularGrid2D:
         """
         Returns grid components
         """
-        return {"radius": np.zeros(self.theta.shape) + self.radius, "theta": self.theta}
+        return {"radius": np.zeros(self.theta.shape) + self.radius, "theta": self.theta, "X":self.X,"Y":self.Y}
 
     def numel(self):
         """

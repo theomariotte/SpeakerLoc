@@ -36,6 +36,45 @@ class MicArray:
         
         return d
 
+    def beamformer(self,
+                   frame,
+                   src_loc,
+                   fs,
+                   Nb: Optional[int]=1024,
+                   c0: Optional[float]=343.0):
+        
+        
+        if  frame.shape[1] == self.micNumber:
+            frame = frame.T
+        
+        if src_loc.shape[0] == 2:
+            R = np.sqrt( (self.x - src_loc[0])**2 + (self.y - src_loc[1])**2 )
+        if src_loc.shape[0] == 3:
+            R = np.sqrt( (self.x - src_loc[0])**2 + (self.y - src_loc[1])**2 + (self.z - src_loc[3])**2 )            
+
+        decalage = int(np.ceil(np.max(R) * fs / c0) + 1)
+                
+        # Initialize output signals
+        # Signaux décalés correspondant à chaque micro
+        signaux_avances = np.zeros((self.micNumber(), Nb))
+        # Signaux en sortie de formation de voies
+        t2fin = Nb + 2 * decalage
+        t = np.arange(frame.shape[1]) / fs  # a verifier
+        t2 = t[:t2fin]
+        jj=0
+        delay_set = R/c0
+        for delay in delay_set:
+            t_dec = t2 + delay
+            t_dec = t_dec[decalage: -1]
+            signaux_temp = np.interp(t_dec, t2, frame[jj, :t2fin])
+            signaux_avances[jj, :] = signaux_temp[:Nb]
+            jj+=1
+        bf_output = np.mean(signaux_avances, 0)
+
+        #Energie = np.resize(Energie,new_shape=(Nx, Ny))
+        return bf_output        
+
+
     def getCoordinates(self):
         """
         Returns microphones coeerdinates over each axis of the frame

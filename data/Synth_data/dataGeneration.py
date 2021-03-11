@@ -32,27 +32,38 @@ fs = 16000
 rt60_tgt = 0.3  # en secondes
 room_dim = [4, 6]  # en mètres
 # Signal to noise ratio
-snr = 10.
+snr = None
 ref_mic_idx = 0
 # if True, add noise source in a corner of the room in addition to noise added by simulation
 noise_src_fl = False
 noise_src_loc = [3.9, 5.9]
 
 ### Sources DOAs [deg]
-doa_src = [45., 135. ,225. ,315.]
+#doa_src = [45., 135. ,225. ,315.]
+doa_src = [45,125]
 # distance from array center [m]
 src_dist = 1.
 
 ### microphone array properties
-nb_mic = 8
-radius = 100e-3
+
+# type of array ("circular","ULA")
+typ = "ULA"
+nb_mic = 4
+# if ULA :
+x_start = -0.1
+x_stop = 0.1
+# if circular :
+theta_start = 0
+theta_stop = 360
+radius = 0.1
+
 Lg_t = 0.100                # Largeur du filtre (en s)
 Lg = np.ceil(Lg_t*fs)       # en échantillons
 center = [2, 3]
 fft_len = 512
 
 # overlap between signals
-overlap12 = 1.0
+overlap12 = 0.0
 overlap23 = 5.0
 overlap34 = 3.0
 
@@ -128,23 +139,41 @@ if noise_src_fl:
     room.add_source(noise_src_loc, signal=bruit[:noise_duration], delay=0.5)
     nb_src+=1
 
+if typ == "circular":
 
-# create microphone array
-micropnts = np.zeros((8, 2))
-micropnts[0, :] = np.array([-0.1, 0])
-micropnts[1, :] = np.array([-0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
-micropnts[2, :] = np.array([0, -0.1])
-micropnts[3, :] = np.array([0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
-micropnts[4, :] = np.array([0.1, 0])
-micropnts[5, :] = np.array([0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
-micropnts[6, :] = np.array([0, 0.1])
-micropnts[7, :] = np.array([-0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
+    # create circular microphone array
+    theta_step = (theta_stop - theta_start)/nb_mic
+    theta = np.arange(theta_start,theta_stop,theta_step)
+    theta*=np.pi/180.0
+    x_mic = radius * np.cos(theta)
+    y_mic = radius * np.sin(theta)
+    """
+    micropnts = np.zeros((nb_mic, 2))
+    micropnts[0, :] = np.array([-0.1, 0])
+    micropnts[1, :] = np.array([-0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
+    micropnts[2, :] = np.array([0, -0.1])
+    micropnts[3, :] = np.array([0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
+    micropnts[4, :] = np.array([0.1, 0])
+    micropnts[5, :] = np.array([0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
+    micropnts[6, :] = np.array([0, 0.1])
+    micropnts[7, :] = np.array([-0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
+    """
+
+elif typ == "ULA":
+    # create linear microphone array
+    x_step = (x_stop-x_start)/nb_mic
+    x_mic = np.arange(x_start,x_stop,x_step)
+    y_mic = np.zeros(x_mic.shape)
+
+micropnts = np.array([x_mic,y_mic]).T
 micropnts += center
 
 mics = pra.beamforming.Beamformer(np.array(micropnts).T, fs, N=fft_len, Lg=Lg, hop=None)
 
 # Placement de l'antenne :
 room.add_microphone_array(mics)
+# show room
+room.plot()
 
 # Graphiques Beamforming :
 for ii in range(nb_src):
@@ -154,7 +183,7 @@ for ii in range(nb_src):
     plt.title(f"Source {ii+1}")
 
 if noise_src_fl:
-    room.mic_array.rake_delay_and_sum_weights(room.sources[nb_src-nb_src+4][:1])
+    room.mic_array.rake_delay_and_sum_weights(room.sources[nb_src-1][:1])
     fig, ax = room.plot(freq=[500, 1000, 2000, 4000, 8000], img_order=0)
     ax.legend(['500', '1000', '2000', '4000', '8000'])
     plt.title("Source de bruit")
@@ -162,16 +191,23 @@ if noise_src_fl:
 plt.show()
 
 # Simulation (Construit la RIR automatiquement) :
-room.simulate(reference_mic=ref_mic_idx,snr=snr)
+if snr is not None:
+    room.simulate(reference_mic=ref_mic_idx,snr=snr)
+else:
+    room.simulate()
+    snr="inf"
 
 """
 Saving and post processing
 """
 # Enregistrement du signal audio reçu par l'antenne :
-name = "IS1000a_TR{:d}_T{:d}_nch{:d}_ola{:d}_noise{:d}".format(int(rt60_tgt*1e3),
-                                                               int(np.ceil(total_duration)),
-                                                               int(nb_mic),ola_ratio,
-                                                               int(noise_src_fl))
+name = "IS1000a_TR{:d}_T{:d}_nch{:d}_snr{}_ola{:d}_noise{:d}".format(int(rt60_tgt*1e3),
+                                                                     int(np.ceil(
+                                                                         total_duration)),
+                                                                     int(nb_mic),
+                                                                     str(snr),
+                                                                     ola_ratio,
+                                                                     int(noise_src_fl))
 room.mic_array.to_wav(
     f"{output_dir}{name}.wav",
     norm=True,
@@ -179,12 +215,9 @@ room.mic_array.to_wav(
 
 # Amélioration du résultat grâce au beamforming :
 signal_das = mics.process(FD=False)
-
+signal_das/= np.max(np.abs(signal_das))
 # Enregistrement du ignal audio reçu par l'antenne :
-name = "BF_IS1000a_TR{:d}_T{:d}_nch{:d}_ola{:d}_noise{:d}".format(int(rt60_tgt*1e3),
-                                                                  int(np.ceil(total_duration)),
-                                                                  int(nb_mic),ola_ratio,
-                                                                  int(noise_src_fl))
+name = "BF_"+name
 wavfile.write(filename=f"{output_dir}{name}.wav",
               rate=fs,
               data=signal_das)
