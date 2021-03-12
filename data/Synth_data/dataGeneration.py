@@ -32,7 +32,7 @@ fs = 16000
 rt60_tgt = 0.3  # en secondes
 room_dim = [4, 6]  # en mètres
 # Signal to noise ratio
-snr = 15
+snr = None
 ref_mic_idx = 0
 # if True, add noise source in a corner of the room in addition to noise added by simulation
 noise_src_fl = False
@@ -47,11 +47,12 @@ src_dist = 1.
 ### microphone array properties
 
 # type of array ("circular","ULA")
-typ = "ULA"
-nb_mic = 4
+typ = "circular"
+nb_mic = 8
 # if ULA :
 x_start = -0.1
 x_stop = 0.1
+
 # if circular :
 theta_start = 0
 theta_stop = 360

@@ -23,7 +23,7 @@ for i in range(8):
 
 # Synthetic data
 wav_dir = "./data/Synth_data/output/"
-audio_names = ["IS1000a_TR300_T31_nch4_snr15_ola1_noise0"]
+audio_names = ["IS1000a_TR300_T31_nch4_snrinf_ola1_noise0"]
 
 # True DOAs
 #doa_ref = [45.,135.,225.,315.]
@@ -39,18 +39,24 @@ theta_start = 0
 theta_stop = 360
 radius = 0.1
 
+# circular grid parameters
+start = 0
+step = 5
+stop = 180
+r = 1
+
+# wave reader instance
 sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
 
-
 # wavform framing parameters
-winlen = 256
+winlen = 1024
 winshift = winlen//2
 
 # number of snapshots for doa estimation (i.e. number of frame)
 duration = 20.
-num_snapshot = int(0.5*duration*16000//winlen)
-num_snapshot = 10
+num_snapshot = int(0.25*duration*16000//winlen)
+#num_snapshot = 10
 
 sig.load(winlen=winlen, shift=winshift)
 fs = sig.getFs()
@@ -100,16 +106,10 @@ elif typ == "ULA":
 
 micropnts = np.array([x_mic,y_mic,z_mic]).T
 
-# build microphone array
-
+# microphone array instance
 mic_array = MicArray(micropnts=micropnts)
 
-# build grid
-start = 0
-step = 5
-stop = 180
-r = 1
-
+# Grid instance
 grid = CircularGrid2D(theta_start=start,
                       theta_stop=stop,
                       theta_step=step,
