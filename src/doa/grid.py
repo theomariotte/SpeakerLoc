@@ -66,19 +66,31 @@ class CircularGrid2D:
             raise Exception(
                 "<array> parameter should be a microphone array object !")
 
-        # distance between reference mic and others in the array
-        dist = mic_array.getDistance(ref_mic_idx)
+        # microphone coordinates
+        x_mic, y_mic, _ = mic_array.getCoordinates()
+
+        # sources coordinates
+        x_src = self.radius * np.cos(self.theta)
+        y_src = self.radius * np.sin(self.theta)
+
+        #distance between each source and each microphone
+        R = np.sqrt( (x_mic[:,np.newaxis].T - x_src[:,np.newaxis])**2 + (y_mic[:,np.newaxis].T - y_src[:,np.newaxis])**2 )
+        tdoa = R/c0
+
+        ## distance between reference mic and others in the array
+        #dist = mic_array.getDistance(ref_mic_idx)
     
         # compute TDOA for each microphone
-        tdoa = dist[:, np.newaxis] * np.cos(self.theta[:,np.newaxis].T) / c0 
+        #doa = dist[:, np.newaxis] * np.cos(self.theta[:,np.newaxis].T) / c0 
         #tdoa = np.matmul(dist[:, np.newaxis], self.theta[:, np.newaxis].T).T
 
-        return tdoa.T
+        return tdoa
 
     def getRTF(self,
                freq,
                fs,
                array,
+               freq_idx_vec: Optional[None]=None,
                reference_idx: Optional[int] = 0,
                c0: Optional[float] = 343.0):
         """
@@ -87,9 +99,13 @@ class CircularGrid2D:
         :param freq: np array containing frequencies where RTF is evaluated
         :param fs: sampling rate
         :param array: microphone array (as MicArray object) 
+        :param freq_idx_vec: array containing indexes of frequency to be used (default None - all frequencies in <freq> are considered)
         :param reference_idx: reference microphone index for relative delay calculation (default : 0)
         :param c0: speed of sound in m/s (default: 343.0)
         """
+        # working frequency band
+        if freq_idx_vec is not None:
+            freq = freq[freq_idx_vec]
 
         aliasing = np.where(freq > fs/2)[0]
         if aliasing.shape[0] > 0:
@@ -135,7 +151,7 @@ if __name__ == "__main__":
 
     start = 0
     step = 5
-    stop = 360
+    stop = 180
     r = 0.6
     fs = 16e3
     Nf = 128
@@ -146,8 +162,8 @@ if __name__ == "__main__":
                           theta_step=step,
                           radius=r)
 
-    x_vec = np.array([0., -1., 0., 1.])
-    y_vec = np.array([1., 0., -1., 0.])
+    x_vec = np.array([-0.1, -0.5, 0.5, 0.1])
+    y_vec = np.array([0., 0., 0., 0.])
     z_vec = np.zeros(4)
 
     mics = np.array([x_vec,y_vec,z_vec]).T

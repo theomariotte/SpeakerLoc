@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import matplotlib.pyplot as plt
 
 from typing import Optional
 from wave_reader import WaveProcessorSlidingWindow
@@ -44,7 +45,7 @@ class DoaMLE(DoaBase):
                            freq_idx_vec=None):
 
         if freq_idx_vec is None:
-            freq_idx_vec = range(0, len(freq)-1, len(freq))
+            freq_idx_vec = range(len(freq))
 
         nb_freq = len(freq_idx_vec)
         num_src = self.grid.shape()[0]
@@ -62,11 +63,16 @@ class DoaMLE(DoaBase):
             # Broad band histogram
             H = np.zeros((num_src,))
             k = 0
+            sigma_sig = []
+            sigma_nn = []
             for f_idx in freq_idx_vec:
-                log_spectrum, snr = self.singleNarrowBandSpectrum(frame=xx,
+                log_spectrum, snr, ss2,sv2 = self.singleNarrowBandSpectrum(frame=xx,
                                                                   rtf=rtf,
                                                                   nb_freq=nb_freq,
                                                                   freq_index=f_idx)
+
+                sigma_sig.append(ss2)
+                sigma_nn.append(sv2)
 
                 #TODO (21/03/06) temporary remove first value -> problem here !
                 log_spectrum = log_spectrum[1:]
@@ -88,7 +94,13 @@ class DoaMLE(DoaBase):
                 # update histogram
                 H += q_whole * X
                 k += 1
-
+            """
+            plt.figure()
+            plt.plot(freq[freq_idx_vec],sigma_sig)#,freq[freq_idx_vec],sigma_nn,'r')
+            #plt.legend("Signal DSP", "Noise DSP")
+            plt.grid()
+            plt.show()
+            """
         return H
 
     def singleNarrowBandSpectrum(self,
@@ -114,15 +126,20 @@ class DoaMLE(DoaBase):
         for ii in range(src_num):
 
             # RTF at the current frequency bin
-            d = rtf[ii, freq_index, :]
+            d = rtf[ii, freq_index,:]
             d = d[:, np.newaxis]
 
             #pseudo inverse of d
-            d_inv = np.linalg.pinv(d)
-            db_inv = np.dot(d_inv,B_inv)
+            #db = np.dot(B,d)
+            #db_inv = np.linalg.pinv(db)
+            tmp_1 = np.dot(d.conj().T,B_inv)
+            tmp_2 = 1.0/( np.dot( d.conj().T , np.dot( B_inv, d )) )
+            db_inv = tmp_2 * tmp_1
+            #err_ = np.mean(np.mean(np.abs(db_inv-db_inv_2)**2))
+            #db_inv = np.dot(d_inv,B_inv)
 
             # projection of d
-            P = np.dot(d, db_inv)
+            P = np.dot(d, db_inv)   
 
             # orthogonal projection of d
             P_orth = np.eye(mic_num) - P
@@ -136,14 +153,14 @@ class DoaMLE(DoaBase):
             prod_ = np.dot(db_inv, np.dot(tmp_, db_inv.conj().T))
             sigma_s2 = prod_[0][0].astype(float)
 
-            spectrum = np.dot(d, sigma_s2*d.conj().T) + sigma_v2 * B
+            spectrum = np.dot(d, sigma_s2*d.conj().T) + sigma_v2* B
             log_spectrum[ii] = np.log(np.linalg.det(spectrum))
 
             # a posteriori SNR for confidence measure when weighting broadband histogram
             Sigma_V = sigma_v2 * B
             aSNR = np.dot(z.conj().T, z)/np.trace(Sigma_V).astype(float)
 
-        return 1./log_spectrum, aSNR[0][0]
+        return 1./log_spectrum, aSNR[0][0], sigma_s2, sigma_v2
 
 class DoaDelayAndSumBeamforming(DoaBase):
 

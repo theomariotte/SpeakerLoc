@@ -32,7 +32,7 @@ fs = 16000
 rt60_tgt = 0.3  # en secondes
 room_dim = [4, 6]  # en mètres
 # Signal to noise ratio
-snr = None
+snr = 15
 ref_mic_idx = 0
 # if True, add noise source in a corner of the room in addition to noise added by simulation
 noise_src_fl = False
