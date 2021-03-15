@@ -223,7 +223,7 @@ class WaveProcessorSlidingWindow(WaveProcessor):
         else:
             nfft = N
 
-        stft = np.fft.fft(frame, axis=1)
+        stft = np.fft.fft(frame, axis=1)/nfft
 
         return stft[:, 0:nfft//2+1], nfft
 

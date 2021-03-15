@@ -53,7 +53,6 @@ class DoaMLE(DoaBase):
         if freq_idx_vec is None:
             freq_idx_vec = range(len(freq))
 
-        nb_freq = len(freq_idx_vec)
         num_src = self.grid.shape()[0]
         rtf = self.grid.getRTF(freq=freq,
                                fs=self.fs,
@@ -75,7 +74,7 @@ class DoaMLE(DoaBase):
             for f_idx in freq_idx_vec:
                 log_spectrum, snr, ss2,sv2 = self.singleNarrowBandSpectrum(frame=xx,
                                                                   rtf=rtf,
-                                                                  nb_freq=nb_freq,
+                                                                  freq=freq[f_idx],
                                                                   freq_index=f_idx)
 
                 sigma_sig.append(ss2)
@@ -124,14 +123,13 @@ class DoaMLE(DoaBase):
     def singleNarrowBandSpectrum(self,
                                  frame,
                                  rtf,
-                                 nb_freq,
+                                 freq,
                                  freq_index):
 
         z = frame[:, freq_index]
         z = z[:, np.newaxis]
         R = np.dot(z, z.conj().T)
-        B = self.micArray.getSpatialCoherence(idx_freq=freq_index,
-                                              num_freq=nb_freq,
+        B = self.micArray.getSpatialCoherence(freq=freq,
                                               fs=self.fs,
                                               mode="sinc")
 

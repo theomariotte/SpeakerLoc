@@ -148,17 +148,6 @@ if typ == "circular":
     theta*=np.pi/180.0
     x_mic = radius * np.cos(theta)
     y_mic = radius * np.sin(theta)
-    """
-    micropnts = np.zeros((nb_mic, 2))
-    micropnts[0, :] = np.array([-0.1, 0])
-    micropnts[1, :] = np.array([-0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
-    micropnts[2, :] = np.array([0, -0.1])
-    micropnts[3, :] = np.array([0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
-    micropnts[4, :] = np.array([0.1, 0])
-    micropnts[5, :] = np.array([0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
-    micropnts[6, :] = np.array([0, 0.1])
-    micropnts[7, :] = np.array([-0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
-    """
 
 elif typ == "ULA":
     # create linear microphone array

@@ -43,7 +43,15 @@ class MicArray:
                    fs,
                    Nb: Optional[int]=1024,
                    c0: Optional[float]=343.0):
-        
+        """
+        Apply beamforming to a given frame of temporal signal in a given direction
+
+        :param frame: temporal frame of audio signal
+        :param src_loc: localization of the source to be focused (2-d of 3-d)
+        :param fs: sampling rate [Hz]
+        :param Nb: beamforming window length [samples] (default : 1024)
+        :param c0: speed of sound [m/s] (default: 343.0 m/s)
+        """
         
         if  frame.shape[1] == self.micNumber:
             frame = frame.T
@@ -91,6 +99,8 @@ class MicArray:
         """
 
         # checks
+        import matplotlib.pyplot as plt
+
         nb_freq = freq_vec.shape[0]
         if PSD_nn is None:
             PSD_nn = np.ones((nb_freq,))
@@ -105,10 +115,16 @@ class MicArray:
         X = copy.deepcopy(Np)
 
         for mic in range(nbMic):
-            nn = np.random.uniform(low=-1.0,high=1.0,size = nfft)
-            nn_fft = np.fft.fft(nn)
+            nn = np.random.uniform(low=-1.0,
+                                   high=1.0,
+                                   size=nfft)
+            nn_fft = np.fft.fft(nn)/nfft
             nn_fft = nn_fft[0:nb_freq]
+            nn_fft[1:]*=2
             Np[mic,:] = np.sqrt(PSD_nn) * np.exp(1j*np.pi*nn_fft)
+
+        plt.plot(Np[0,:])
+        plt.show()
 
         # generate noise signals$
         f_idx=0
@@ -130,9 +146,8 @@ class MicArray:
         
         X_whole = np.hstack( ( X[:,:], np.fliplr(X[:,:].conj() ) ) )
 
-        import matplotlib.pyplot as plt
         plt.plot(np.linspace(0,fs,nfft),np.abs(X_whole[0,:]))
-        plt.xlabel("Frequency [Hz]")
+        plt.xlabel("Frequency [Hz]")        
         plt.grid()
         plt.show()
         
@@ -141,6 +156,7 @@ class MicArray:
         x = np.fft.ifft(X_whole,axis=1)
 
         return x
+        
     def getInterMicDelay(self,
                          fs,
                          ref_mic_idx: Optional[int]=0,
@@ -223,11 +239,11 @@ if __name__ == "__main__":
         ii+=1
 
     B = arr.getSpatialCoherence(freq=100.0,
-                                fs=16000)
+                                fs=fs)
 
     x = arr.generateDiffuseNoise(freq_vec=np.linspace(0, fs/2, L),
-                                 fs=16000)
-    print(B)
+                                 fs=fs)
+
     N = 2048
     mic_num = arr.micNumber()
     plt.figure(num=121)
