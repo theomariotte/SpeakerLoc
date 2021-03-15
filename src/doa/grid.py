@@ -96,8 +96,8 @@ class CircularGrid2D:
         """
         Compute relative Transfert Function between each microphone and each source on the grid
 
-        :param freq: np array containing frequencies where RTF is evaluated
-        :param fs: sampling rate
+        :param freq: np array containing frequencies where RTF is evaluated [Hz]
+        :param fs: sampling rate [Hz]
         :param array: microphone array (as MicArray object) 
         :param freq_idx_vec: array containing indexes of frequency to be used (default None - all frequencies in <freq> are considered)
         :param reference_idx: reference microphone index for relative delay calculation (default : 0)
@@ -110,21 +110,23 @@ class CircularGrid2D:
         aliasing = np.where(freq > fs/2)[0]
         if aliasing.shape[0] > 0:
             raise Exception("Frequencies should respect Nyquist criterion !!!")
+        
+        # normalized frequency (with respect to sampling rate)
+        freq_norm = freq/fs*2
 
         tdoa = self.getTDOA(mic_array=array,
                             ref_mic_idx=reference_idx,
                             c0=c0)
 
-        freq_num = len(freq)
+        freq_num = freq_norm.shape[0]
         mic_num = array.micNumber()
         src_num = self.shape()[0]
 
         RTF = np.zeros((src_num, freq_num, mic_num),dtype=complex)
-
+        
         for isrc in range(src_num):
             for imic in range(mic_num):
-                jwt = -1j * 2 * np.pi * freq * \
-                    tdoa[isrc, imic] * fs / freq_num
+                jwt = -1j * 2 * np.pi * freq_norm * tdoa[isrc, imic] * fs
                 RTF[isrc, :, imic] = np.exp(jwt)
 
         return RTF
@@ -150,8 +152,8 @@ class CircularGrid2D:
 if __name__ == "__main__":
 
     start = 0
-    step = 5
-    stop = 180
+    step = 10
+    stop = 360
     r = 0.6
     fs = 16e3
     Nf = 128
@@ -161,9 +163,9 @@ if __name__ == "__main__":
                           theta_stop=stop,
                           theta_step=step,
                           radius=r)
-
-    x_vec = np.array([-0.1, -0.5, 0.5, 0.1])
-    y_vec = np.array([0., 0., 0., 0.])
+    radius = 0.1
+    x_vec = radius*np.array([1, 0.0, -1, 0.0])
+    y_vec = radius*np.array([0.0, 1, 0.0, -1])
     z_vec = np.zeros(4)
 
     mics = np.array([x_vec,y_vec,z_vec]).T
@@ -178,13 +180,48 @@ if __name__ == "__main__":
     theta = tmp["theta"] * 180./np.pi
     T,F = np.meshgrid(theta,ff) 
 
+    # normalized frequency (between 0 and 1)
+    ff_norm =  ff/fs*2
     for i in range(rtf.shape[2]):
+        tf_phase_th = np.zeros((tdoa.shape[0],ff.shape[0]))
+        ii=0
+        for f in ff_norm:
+            jj=0
+            for t in tdoa[:,i]:
+                tf_phase_th[jj,ii] = -2 * np.pi * f * t *fs
+                jj+=1
+            ii+=1
+        th_rtf = np.exp(1j*tf_phase_th)
         fig = plt.figure()
-        ax = fig.add_subplot(111)
+        plt.subplot(2,2,1)
+        plt.title(f"Microphone {i+1} - TF phase")
+
         #ax.set_ylim(0,Ly)
-        plt.pcolor(T.T,F.T,np.angle(rtf[:,:,i]),cmap="winter",shading="auto")
+        plt.pcolor(T.T,F.T,np.unwrap(np.angle(rtf[:,:,i]),axis=1),cmap="winter",shading="auto")
+        #plt.pcolor(T.T,F.T,np.angle(rtf[:,:,i]),cmap="winter",shading="auto")
+        plt.ylabel("Frequency [Hz]")
+    
+        plt.subplot(2,2,2)
+        plt.title(f"Microphone {i+1} - Theoretical TF phase")
+        #ax.set_ylim(0,Ly)
+        #plt.pcolor(T.T,F.T,np.angle(th_rtf),cmap="winter",shading="auto")
+        plt.pcolor(T.T,F.T,np.unwrap(np.angle(th_rtf)),cmap="winter",shading="auto")
+        plt.colorbar()
         plt.xlabel("DOA [°]")
-        plt.ylabel("RTF phase (wrapped)")
+        plt.ylabel("Frequency [Hz]")
+
+
+        plt.subplot(2,2,3)
+        plt.title(f"Microphone {i+1} - TDOA")
+        plt.plot(theta,tdoa[:,i],'k-')
+        plt.xlabel("DOA [°]")
+        plt.ylabel("Delay")
+        plt.subplot(2,2,4)
+        plt.title("Array geometry")
+        plt.plot(x_vec,y_vec,'ko')
+        plt.xlabel("x")
+        plt.ylabel("y")
+
         plt.show()
 
 

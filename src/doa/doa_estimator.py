@@ -36,7 +36,13 @@ class DoaBase():
 
 
 class DoaMLE(DoaBase):
+    """
+    Method described in [1] by Hadad et Gannot. This method consist in localizing sources using a weighted histogram. 
+    one localization spectrum (i.e. likelihood as a function of doa) is estimated per TF bin. It is supposed that one speaker 
+    is active for each TF bin. Then, weight od the hitogram are computing using a confidence measure based on a posteriori SNR
+    and   
 
+    """
     def broadBandHistogram(self,
                            idx_frame_start,
                            idx_frame_stop,
@@ -65,6 +71,7 @@ class DoaMLE(DoaBase):
             k = 0
             sigma_sig = []
             sigma_nn = []
+            snr_vec = []
             for f_idx in freq_idx_vec:
                 log_spectrum, snr, ss2,sv2 = self.singleNarrowBandSpectrum(frame=xx,
                                                                   rtf=rtf,
@@ -83,6 +90,11 @@ class DoaMLE(DoaBase):
                 tmp_.mask[idx_doa_NB] = True
                 qD = log_spectrum[idx_doa_NB] / tmp_.sum()
 
+                if qD < 0:
+                    logging.warning("Confidence measure < 0")
+
+                snr_vec.append(snr)
+
                 # confidence measure on SNR
                 qSNR = int(snr > snr_thres)
 
@@ -94,6 +106,12 @@ class DoaMLE(DoaBase):
                 # update histogram
                 H += q_whole * X
                 k += 1
+            """
+            fig = plt.figure(num=1)
+            ax = fig.add_subplot(111)
+            plt.plot(freq[freq_idx_vec],snr_vec)
+            plt.show()
+            """
             """
             plt.figure()
             plt.plot(freq[freq_idx_vec],sigma_sig)#,freq[freq_idx_vec],sigma_nn,'r')
@@ -146,19 +164,19 @@ class DoaMLE(DoaBase):
 
             # Variance of the noise
             trace = np.trace(np.dot(P_orth, np.dot(R, B_inv)))
-            sigma_v2 = 1/(mic_num-1) * trace
+            sigma_v2 = (1/(mic_num-1) * trace).astype(float)
 
-            # variance of the signal
-            tmp_ = R - sigma_v2*B
+            # DSP of the signal
+            Sigma_V = sigma_v2 * B
+            tmp_ = R - Sigma_V
             prod_ = np.dot(db_inv, np.dot(tmp_, db_inv.conj().T))
             sigma_s2 = prod_[0][0].astype(float)
 
-            spectrum = np.dot(d, sigma_s2*d.conj().T) + sigma_v2* B
+            spectrum = np.dot(d, sigma_s2*d.conj().T) + Sigma_V
             log_spectrum[ii] = np.log(np.linalg.det(spectrum))
 
             # a posteriori SNR for confidence measure when weighting broadband histogram
-            Sigma_V = sigma_v2 * B
-            aSNR = np.dot(z.conj().T, z)/np.trace(Sigma_V).astype(float)
+            aSNR = (np.dot(z.conj().T, z)/np.trace(Sigma_V)).astype(float)
 
         return 1./log_spectrum, aSNR[0][0], sigma_s2, sigma_v2
 

@@ -23,13 +23,14 @@ for i in range(8):
 
 # Synthetic data
 wav_dir = "./data/Synth_data/output/"
-audio_names = ["IS1000a_TR300_T31_nch4_snrinf_ola1_noise0"]
+audio_names = ["IS1000a_TR300_T31_nch4_snr15_ola1_noise0"]
 
-# True DOAs
+# True DOAs and microphone array parameters
 #doa_ref = [45.,135.,225.,315.]
 doa_ref = [45.,125.]
 nb_mic = 4
-typ = "ULA"
+typ = "circular"
+
 # in case of ULA
 x_start = -0.1
 x_stop = 0.1
@@ -45,6 +46,9 @@ step = 5
 stop = 180
 r = 1
 
+# confidence measure threshold
+thres = 1.5
+
 # wave reader instance
 sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
@@ -54,8 +58,9 @@ winlen = 1024
 winshift = winlen//2
 
 # number of snapshots for doa estimation (i.e. number of frame)
-duration = 20.
-num_snapshot = int(0.25*duration*16000//winlen)
+duration = 4.0
+num_snapshot = int(duration*16000//winlen)
+#num_snapshot = int(0.25*duration*16000//winlen)
 #num_snapshot = 10
 
 sig.load(winlen=winlen, shift=winshift)
@@ -85,17 +90,6 @@ if typ == "circular":
     x_mic = radius * np.cos(theta)
     y_mic = radius * np.sin(theta)
     z_mic = np.zeros(x_mic.shape)
-    """
-    micropnts = np.zeros((nb_mic, 2))
-    micropnts[0, :] = np.array([-0.1, 0])
-    micropnts[1, :] = np.array([-0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
-    micropnts[2, :] = np.array([0, -0.1])
-    micropnts[3, :] = np.array([0.1*np.sqrt(2)/2, -0.1*np.sqrt(2)/2])
-    micropnts[4, :] = np.array([0.1, 0])
-    micropnts[5, :] = np.array([0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
-    micropnts[6, :] = np.array([0, 0.1])
-    micropnts[7, :] = np.array([-0.1*np.sqrt(2)/2, 0.1*np.sqrt(2)/2])
-    """
 
 elif typ == "ULA":
     # create linear microphone array
@@ -103,6 +97,9 @@ elif typ == "ULA":
     x_mic = np.arange(x_start,x_stop,x_step)
     y_mic = np.zeros(x_mic.shape)
     z_mic = np.zeros(x_mic.shape)
+
+else:
+    raise Exception("No microphone array found !")
 
 micropnts = np.array([x_mic,y_mic,z_mic]).T
 
@@ -137,18 +134,13 @@ for idx in range(sig.numel()):
     doaMap = 10*np.log10(doaMap/np.max(doaMap))
 
     fig = plt.figure()
-    plt.axes(projection='polar')
-    theta_plt = theta*np.pi/180.0 -np.pi
-    plt.polar(theta_plt,doaMap)
-    #plt.xlabel("DOA [°]")
-    #plt.ylabel("power")
-    #plt.show(block=False)
-    #plt.pause(1.0)
-    #plt.close(fig)
+    #theta_plt = theta*np.pi/180.0 -np.pi
+    theta_plt = theta
+    plt.plot(theta_plt,doaMap)
+    plt.xlabel("DOA [°]")
+    plt.ylabel("power")
+    plt.show()
 """
-
-# threshold for confidence measure
-thres = 1.0
 
 # doa estimator
 doaEngine = DoaMLE(microphone_array=mic_array,
