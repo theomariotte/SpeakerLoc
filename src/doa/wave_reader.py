@@ -223,9 +223,9 @@ class WaveProcessorSlidingWindow(WaveProcessor):
         else:
             nfft = N
 
-        stft = np.fft.fft(frame, axis=1)/nfft
+        stft = np.fft.fft(frame, axis=1)
 
-        return stft[:, 0:nfft//2+1], nfft
+        return 2*stft[:, 0:nfft//2+1]/nfft, nfft
 
     def frameNumber(self):
         return self.data_sw.shape[0]

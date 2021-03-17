@@ -23,13 +23,13 @@ for i in range(8):
 
 # Synthetic data
 wav_dir = "./data/Synth_data/output/"
-audio_names = ["IS1000a_TR300_T31_nch4_snr15_ola1_noise0"]
+audio_names = ["IS1000a_TR300_T31_nch4_snrinf_ola1_noise0"]
 
 # True DOAs and microphone array parameters
 #doa_ref = [45.,135.,225.,315.]
 doa_ref = [45.,125.]
 nb_mic = 4
-typ = "circular"
+typ = "ULA"
 
 # in case of ULA
 x_start = -0.1
@@ -47,7 +47,7 @@ stop = 180
 r = 1
 
 # confidence measure threshold
-thres = 1.5
+thres = 1.0
 
 # wave reader instance
 sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
@@ -80,9 +80,7 @@ f_stop_idx = np.where(tmp_sup == min(tmp_sup))[0]
 freq_idx_vec = np.arange(f_start_idx, f_stop_idx+1).astype(np.int32)
 nb_freq = len(freq_idx_vec)
 
-
 if typ == "circular":
-
     # create circular microphone array
     theta_step = (theta_stop - theta_start)/nb_mic
     theta = np.arange(theta_start,theta_stop,theta_step)

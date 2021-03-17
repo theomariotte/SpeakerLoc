@@ -85,9 +85,9 @@ class DoaMLE(DoaBase):
 
                 # confidence measure on DOA estimation
                 idx_doa_NB = np.argmax(log_spectrum)
-                tmp_ = np.ma.array(log_spectrum, mask=False)
-                tmp_.mask[idx_doa_NB] = True
-                qD = log_spectrum[idx_doa_NB] / tmp_.sum()
+                #tmp_ = np.ma.array(log_spectrum, mask=False)
+                #tmp_.mask[idx_doa_NB] = True
+                qD = log_spectrum[idx_doa_NB] / log_spectrum.sum()
 
                 if qD < 0:
                     logging.warning("Confidence measure < 0")
