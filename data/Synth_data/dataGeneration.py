@@ -190,7 +190,7 @@ name = "IS1000a_T{:d}_nch{:d}_snr{}_ola{:d}_noise{:d}".format(int(np.ceil(
 segs=list()
 t_start=0.5
 for ii in range (len(doa_src)):
-    segs.append({"speaker": f"spk{ii+1}", "start":t_start , "stop":t_start+len(audio[ii])/fs_audio ,"doa": doa_src[ii]})
+    segs.append({"speaker": f"spk{ii+1}", "start":t_start , "stop":t_start+len(audio[ii])/fs_audio ,"doa": doa_src[ii]*180.0/np.pi})
     t_start += len(audio[ii])/fs_audio - overlaps[ii]
 
 with open(output_dir+name+'.pkl','wb') as fh:

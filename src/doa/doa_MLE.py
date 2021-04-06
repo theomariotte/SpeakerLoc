@@ -4,6 +4,7 @@ This code estimates de DOA of multiple sound sources based on the method describ
 """
 
 import os
+import pickle
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,20 +14,21 @@ from wave_reader import WaveProcessorSlidingWindow
 from doa_estimator import DoaMLE
 from doa_estimator import DoaDelayAndSumBeamforming
 
-"""
-# real data from AMi corpus
-wav_dir = "./data/AMI/"
-audio_names = []
-for i in range(8):
-    audio_names.append(f"IS1000a.Array1-0{i+1}")
-"""
-
 # Synthetic data
-wav_dir = "./data/Synth_data/output/"
-audio_names = ["IS1000a_TR300_T23_nch8_snrinf_ola1_noise0"]
+wav_dir = "./data/Synth_data/output/CIRC/"
+audio_names = ["IS1000a_T23_nch8_snrinf_ola1_noise0"]
+
+# open pickle file where segments are stored with doa per speaker
+with open(wav_dir+audio_names[0]+".pkl",'rb') as fh:
+    segments = pickle.load(fh)
+
+doa = list()
+for seg in segments:
+    doa.append(seg["doa"])
+
 
 # True DOAs and microphone array parameters
-doa_ref = np.array([45.0,135.0,225.0,315.0])
+doa_ref = np.array(doa)
 nb_mic = 8
 ref_mic_idx=0
 
