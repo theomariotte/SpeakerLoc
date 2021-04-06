@@ -86,7 +86,60 @@ class CircularGrid2D:
 
         return tdoa
 
-    def getRTF(self,
+    def getRDTF(self,
+               freq,
+               fs,
+               array,
+               freq_idx_vec: Optional[None]=None,
+               reference_idx: Optional[int] = 0,
+               c0: Optional[float] = 343.0):
+        """
+        Compute Relative Direct Transfert Function (RDTF) with respect to a reference microphone.
+        If there is N microphones in the array, the output array shape will be (K,N-1) where K is 
+        the number of frequencies to be considered. In fact, relative delay between reference microphone and itself
+        is always null, so the RDTF is 1 for all frequencies. This RDTF is removed to avoid useless computations.
+
+        :param freq: np array containing frequencies where RTF is evaluated [Hz]
+        :param fs: sampling rate [Hz]
+        :param array: microphone array (as MicArray object) 
+        :param freq_idx_vec: array containing indexes of frequency to be used (default None - all frequencies in <freq> are considered)
+        :param reference_idx: reference microphone index for relative delay calculation (default : 0)
+        :param c0: speed of sound in m/s (default: 343.0)
+        """
+        # if frequency band is constrained
+        if freq_idx_vec is not None:
+            freq = freq[freq_idx_vec]
+
+        # check Nyquist criterion
+        aliasing = np.where(freq > fs/2)[0]
+        if aliasing.shape[0] > 0:
+            raise Exception("Frequencies should respect Nyquist criterion !!!")
+        
+        # normalized frequency (with respect to fs/2) 
+        freq_norm = freq/fs*2
+
+        # compute TDOA between each source of the grid and each microphone of the array
+        tdoa = self.getTDOA(mic_array=array,
+                        ref_mic_idx=reference_idx,
+                        c0=c0)
+
+        # compute relative delay between microphones and remove delay associated with reference mic (always zero)
+        rel_tdoa = np.delete( (np.expand_dims(tdoa[:,reference_idx],axis=1)-tdoa),reference_idx,axis=1)
+
+        freq_num = freq_norm.shape[0]
+        mic_num = array.micNumber()-1
+        src_num = self.shape()[0]
+
+        RDTF = np.zeros((src_num, freq_num, mic_num),dtype=complex)
+        
+        for isrc in range(src_num):
+            for imic in range(mic_num):
+                jwt = -1j * 2 * np.pi * freq_norm * rel_tdoa[isrc, imic] * fs
+                RDTF[isrc, :, imic] = np.exp(jwt)
+
+        return RDTF
+
+    def getTF(self,
                freq,
                fs,
                array,
@@ -122,14 +175,14 @@ class CircularGrid2D:
         mic_num = array.micNumber()
         src_num = self.shape()[0]
 
-        RTF = np.zeros((src_num, freq_num, mic_num),dtype=complex)
+        TF = np.zeros((src_num, freq_num, mic_num),dtype=complex)
         
         for isrc in range(src_num):
             for imic in range(mic_num):
                 jwt = -1j * 2 * np.pi * freq_norm * tdoa[isrc, imic] * fs
-                RTF[isrc, :, imic] = np.exp(jwt)
+                TF[isrc, :, imic] = np.exp(jwt)
 
-        return RTF
+        return TF
 
     def shape(self):
         """
@@ -173,7 +226,7 @@ if __name__ == "__main__":
 
     tdoa = grid.getTDOA(mic_array=arr)
 
-    rtf = grid.getRTF(freq=ff,
+    rtf = grid.getTF(freq=ff,
                       fs=fs,
                       array=arr)
     tmp = grid.components()

@@ -7,14 +7,9 @@ class MicArray:
     """
     Microphone array object
     """
-    #def __init__(self,x_pos,y_pos,z_pos):
-    #    super().__init__()
-    #    self.x = x_pos
-    #    self.y = y_pos
-    #    self.z = z_pos
 
     def __init__(self,micropnts):
-        super().__init__()
+        super(MicArray,self).__init__()
         if not len(micropnts.shape) == 2:
             raise Exception("Wrong microphone array definition !")
         
@@ -150,9 +145,6 @@ class MicArray:
         plt.xlabel("Frequency [Hz]")        
         plt.grid()
         plt.show()
-        
-
-
         x = np.fft.ifft(X_whole,axis=1)
 
         return x
@@ -183,7 +175,8 @@ class MicArray:
                             freq,
                             fs,
                             c0: Optional[float]= 343.0,
-                            mode: Optional[str]="sinc"):
+                            mode: Optional[str]="sinc",
+                            ref_mic_idx:Optional[None]=None):
         """
         Computes the spatial coherence matrix between each microphones of the array 
 
@@ -193,7 +186,6 @@ class MicArray:
         :param c0: speed of sound in the medium (default = 343 m/s - air at 20°C)
         :param mode: spatial repartition mode (default="sinc" - sinus cardinal)
         """
-
         nbMic = self.micNumber()
         B = np.empty((nbMic,nbMic))
         fn = freq/fs*2
@@ -204,6 +196,10 @@ class MicArray:
                         (self.x[jj]-self.x[ii])**2 + (self.y[jj]-self.y[ii])**2 + (self.z[jj]-self.z[ii])**2)
                     jwt = 2. * np.pi * fn * d_ij * fs / c0
                     B[ii, jj] = np.sinc(jwt)
+        
+            if ref_mic_idx is not None:
+                B = np.delete(np.delete(B,ref_mic_idx,axis=0),ref_mic_idx,axis=1)
+
         else:
             raise NotImplementedError(f"Mode <{mode}> does not exist !")
 

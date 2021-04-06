@@ -23,17 +23,16 @@ for i in range(8):
 
 # Synthetic data
 wav_dir = "./data/Synth_data/output/"
-audio_names = ["IS1000a_TR300_T23_nch8_snrinf_ola1_noise0"]
+audio_names = ["IS1000a_TR300_T23_nch4_snrinf_ola1_noise0"]
 
 # True DOAs and microphone array parameters
-doa_ref = np.array([45.0,135.0,225.0,315.0])
-nb_mic = 8
+doa_ref = [45.,125.]
+nb_mic = 4
 ref_mic_idx=0
 
-#in case of Circular array
-theta_start = 0
-theta_stop = 360
-radius = 0.1
+# in case of ULA    
+x_start = -0.1
+x_stop = 0.1
 
 # circular grid parameters
 start = 0
@@ -49,7 +48,7 @@ sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
 
 # wavform framing parameters
-winlen = 2000
+winlen = 8000
 winshift = winlen//2
 
 # number of snapshots for doa estimation (i.e. number of frame)
@@ -75,13 +74,10 @@ f_stop_idx = np.where(tmp_sup == min(tmp_sup))[0]
 freq_idx_vec = np.arange(f_start_idx, f_stop_idx+1).astype(np.int32)
 nb_freq = len(freq_idx_vec)
 
-
-# create circular microphone array
-theta_step = (theta_stop - theta_start)/nb_mic
-theta = np.arange(theta_start,theta_stop,theta_step)
-theta*=np.pi/180.0
-x_mic = radius * np.cos(theta)
-y_mic = radius * np.sin(theta)
+# create linear microphone array
+x_step = (x_stop-x_start)/nb_mic
+x_mic = np.arange(x_start,x_stop,x_step)
+y_mic = np.zeros(x_mic.shape)
 z_mic = np.zeros(x_mic.shape)
 
 micropnts = np.array([x_mic,y_mic,z_mic]).T

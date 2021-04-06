@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import matplotlib.pyplot as plt
+import tqdm
 
 from typing import Optional
 from wave_reader import WaveProcessorSlidingWindow
@@ -43,27 +44,36 @@ class DoaMLE(DoaBase):
     and   
 
     """
+
     def broadBandHistogram(self,
                            idx_frame_start,
                            idx_frame_stop,
                            freq,
-                           snr_thres = 1.0,
-                           freq_idx_vec=None):
+                           snr_thres=1.0,
+                           freq_idx_vec=None,
+                           ref_mic_idx=None):
 
         if freq_idx_vec is None:
             freq_idx_vec = range(len(freq))
 
         num_src = self.grid.shape()[0]
-        rtf = self.grid.getRTF(freq=freq,
-                               fs=self.fs,
-                               array=self.micArray)
+        if ref_mic_idx is not None:
+            rtf = self.grid.getRDTF(freq=freq,
+                                    fs=self.fs,
+                                    array=self.micArray,
+                                    reference_idx=ref_mic_idx)
+        else:
+            rtf = self.grid.getTF(freq=freq,
+                                  fs=self.fs,
+                                  array=self.micArray)
 
-        for idx in range(idx_frame_start, idx_frame_stop+1):
-
-            logging.critical(
-                f"Process frame {idx - idx_frame_start}/{idx_frame_stop-idx_frame_start}")
+        for idx in tqdm.tqdm(range(idx_frame_start, idx_frame_stop+1), desc="Broad band processing", unit="frame"):
 
             xx, _ = self.waveProc.getAudioFrameSTFT(idx)
+
+            if ref_mic_idx is not None:
+                # remove reference index value if needed
+                xx = np.delete(xx, ref_mic_idx, axis=0)
 
             # Broad band histogram
             H = np.zeros((num_src,))
@@ -72,10 +82,11 @@ class DoaMLE(DoaBase):
             sigma_nn = []
             snr_vec = []
             for f_idx in freq_idx_vec:
-                log_spectrum, snr, ss2,sv2 = self.singleNarrowBandSpectrum(frame=xx,
-                                                                  rtf=rtf,
-                                                                  freq=freq[f_idx],
-                                                                  freq_index=f_idx)
+                log_spectrum, snr, ss2, sv2 = self.singleNarrowBandSpectrum(frame=xx,
+                                                                            rtf=rtf,
+                                                                            freq=freq[f_idx],
+                                                                            freq_index=f_idx,
+                                                                            ref_mic_idx=ref_mic_idx)
 
                 sigma_sig.append(ss2)
                 sigma_nn.append(sv2)
@@ -110,8 +121,8 @@ class DoaMLE(DoaBase):
             ax = fig.add_subplot(111)
             plt.plot(freq[freq_idx_vec],snr_vec)
             plt.show()
-            """
-            """
+            
+            
             plt.figure()
             plt.plot(freq[freq_idx_vec],sigma_sig)#,freq[freq_idx_vec],sigma_nn,'r')
             #plt.legend("Signal DSP", "Noise DSP")
@@ -124,38 +135,38 @@ class DoaMLE(DoaBase):
                                  frame,
                                  rtf,
                                  freq,
-                                 freq_index):
+                                 freq_index,
+                                 ref_mic_idx=None):
 
-        z = frame[:, freq_index]
-        z = z[:, np.newaxis]
+        z = np.expand_dims(frame[:, freq_index], axis=1)
         R = np.dot(z, z.conj().T)
         B = self.micArray.getSpatialCoherence(freq=freq,
                                               fs=self.fs,
-                                              mode="sinc")
+                                              mode="sinc",
+                                              ref_mic_idx=ref_mic_idx)
 
         B_inv = np.linalg.inv(B)
-        mic_num = self.micArray.micNumber()
+        mic_num = B.shape[0]
         src_num = self.grid.shape()[0]
-
         log_spectrum = np.empty((src_num,))
 
         for ii in range(src_num):
 
             # RTF at the current frequency bin
-            d = rtf[ii, freq_index,:]
+            d = rtf[ii, freq_index, :]
             d = d[:, np.newaxis]
 
             #pseudo inverse of d
             #db = np.dot(B,d)
             #db_inv = np.linalg.pinv(db)
-            tmp_1 = np.dot(d.conj().T,B_inv)
-            tmp_2 = 1.0/( np.dot( d.conj().T , np.dot( B_inv, d )) )
+            tmp_1 = np.dot(d.conj().T, B_inv)
+            tmp_2 = 1.0/(np.dot(d.conj().T, np.dot(B_inv, d)))
             db_inv = tmp_2 * tmp_1
             #err_ = np.mean(np.mean(np.abs(db_inv-db_inv_2)**2))
             #db_inv = np.dot(d_inv,B_inv)
 
             # projection of d
-            P = np.dot(d, db_inv)   
+            P = np.dot(d, db_inv)
 
             # orthogonal projection of d
             P_orth = np.eye(mic_num) - P
@@ -178,28 +189,26 @@ class DoaMLE(DoaBase):
 
         return 1./log_spectrum, aSNR[0][0], sigma_s2, sigma_v2
 
+
 class DoaDelayAndSumBeamforming(DoaBase):
 
     def energyMap(self,
                   idx_frame,
-                  Nb: Optional[int]=1024,
-                  ref_index: Optional[int]=0,
-                  c0: Optional[float]=343.0):
+                  Nb: Optional[int] = 1024,
+                  ref_index: Optional[int] = 0,
+                  c0: Optional[float] = 343.0):
 
-        Np =  self.grid.numel()
+        Np = self.grid.numel()
         frame = self.waveProc.getAudioFrame(index=idx_frame)
         coord = self.grid.components()
         X = coord["X"]
         Y = coord["Y"]
         powerMap = np.zeros((Np,))
-        k=0
-        for x,y in zip(X,Y):
+        k = 0
+        for x, y in zip(X, Y):
             bf_sig = self.micArray.beamformer(frame=frame,
                                               src_loc=np.array([x, y]),
                                               fs=self.fs)
-            powerMap[k]=(bf_sig.sum())**2
-            k+=1
-        return powerMap        
-
-
-
+            powerMap[k] = (bf_sig.sum())**2
+            k += 1
+        return powerMap

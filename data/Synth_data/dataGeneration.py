@@ -5,7 +5,7 @@
 # Le 5ème fichier représente le bruit de fond
 
 ########################################################################################################################
-
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import pyroomacoustics as pra
@@ -23,7 +23,7 @@ Parameters
 # Where source signals are stored
 input_dir = "data/Synth_data/input/"
 # Where simulation results are stored
-output_dir = "data/Synth_data/output/"
+output_dir = "data/Synth_data/output/CIRC/"
 
 ### Simulation parameters
 # Target sampling rate [Hz] (resampling if needed)
@@ -39,19 +39,18 @@ noise_src_fl = False
 noise_src_loc = [3.9, 5.9]
 
 ### Sources DOAs [deg]
-#doa_src = [45., 135. ,225. ,315.]
-doa_src = [45,125]
+doa_src = [45., 135. ,225. ,315.]
+#doa_src = [45.0]
+# overlap between the sources above
+#overlap_list = [5.0]
+overlap_list = [1.0, 4.0, 2.0]
 # distance from array center [m]
 src_dist = 1.
 
 ### microphone array properties
 
 # type of array ("circular","ULA")
-typ = "circular"
 nb_mic = 8
-# if ULA :
-x_start = -0.1
-x_stop = 0.1
 
 # if circular :
 theta_start = 0
@@ -64,9 +63,8 @@ center = [2, 3]
 fft_len = 512
 
 # overlap between signals
-overlap12 = 0.0
-overlap23 = 5.0
-overlap34 = 3.0
+overlaps = np.zeros((len(overlap_list)+1,))
+overlaps[:-1] += np.array(overlap_list)
 
 """
 Simulation
@@ -79,18 +77,18 @@ if not os.path.exists(output_dir):
 
 # Importation des signaux audios (up to 4):
 nb_src = len(doa_src)
-doa_src = np.array(doa_src,dtype=np.float)
-i=0
+doa_src = np.array(doa_src, dtype=np.float)
+i = 0
 audio = []
 while i < nb_src:
     fs_audio, sig = wavfile.read(f"{input_dir}is1000a_Headset {i}_mono.wav")
 
     # adjust sampling rate if audio does not fit targeted one
     if fs_audio > fs:
-        sig = dsp.decimate(x=sig,q=fs_audio//fs)  
+        sig = dsp.decimate(x=sig, q=fs_audio//fs)
 
     audio.append(sig)
-    i+=1    
+    i += 1
 
 
 # Théorème de Sabine pour les paramètres de la méthode source-image :
@@ -104,11 +102,10 @@ room = pra.ShoeBox(room_dim,
 
 
 # Source positions
-doa_src*=np.pi/180.
+doa_src *= np.pi/180.
 srcpnts = np.zeros((nb_src, 2))
-i=0
 start = 0.5
-for doa in doa_src:
+for i, doa in enumerate(doa_src):
 
     # cartesian coordinates
     x_ = src_dist * np.cos(doa)
@@ -121,12 +118,11 @@ for doa in doa_src:
     room.add_source(srcpnt, signal=audio[i], delay=start)
 
     # update start time (including overlaps)
-    start += len(audio[i])/fs - overlap12
-    i+=1
+    start += len(audio[i])/fs - overlaps[i]
 
 # for file naming and noise generation (if needed)
-total_duration = start+len(audio[-1])/fs
-ola_ratio = int(np.ceil((overlap12+overlap23+overlap34)/total_duration))
+total_duration = start
+ola_ratio = int(np.ceil(np.sum(overlaps)/total_duration))
 
 # in case of noise source added
 if noise_src_fl:
@@ -134,31 +130,23 @@ if noise_src_fl:
     fs_noise, bruit = wavfile.read(f"{input_dir}bruit.wav")
     if fs_noise > fs:
         bruit = dsp.decimate(x=bruit,
-                            q=fs_noise//fs)
+                             q=fs_noise//fs)
 
     noise_duration = int(np.ceil(total_duration*fs))
     room.add_source(noise_src_loc, signal=bruit[:noise_duration], delay=0.5)
-    nb_src+=1
+    nb_src += 1
 
-if typ == "circular":
-
-    # create circular microphone array
-    theta_step = (theta_stop - theta_start)/nb_mic
-    theta = np.arange(theta_start,theta_stop,theta_step)
-    theta*=np.pi/180.0
-    x_mic = radius * np.cos(theta)
-    y_mic = radius * np.sin(theta)
-
-elif typ == "ULA":
-    # create linear microphone array
-    x_step = (x_stop-x_start)/nb_mic
-    x_mic = np.arange(x_start,x_stop,x_step)
-    y_mic = np.zeros(x_mic.shape)
-
-micropnts = np.array([x_mic,y_mic]).T
+# create circular microphone array
+theta_step = (theta_stop - theta_start)/nb_mic
+theta = np.arange(theta_start, theta_stop, theta_step)
+theta *= np.pi/180.0
+x_mic = radius * np.cos(theta)
+y_mic = radius * np.sin(theta)
+micropnts = np.array([x_mic, y_mic]).T
 micropnts += center
 
-mics = pra.beamforming.Beamformer(np.array(micropnts).T, fs, N=fft_len, Lg=Lg, hop=None)
+mics = pra.beamforming.Beamformer(
+    np.array(micropnts).T, fs, N=fft_len, Lg=Lg, hop=None)
 
 # Placement de l'antenne :
 room.add_microphone_array(mics)
@@ -182,22 +170,32 @@ plt.show()
 
 # Simulation (Construit la RIR automatiquement) :
 if snr is not None:
-    room.simulate(reference_mic=ref_mic_idx,snr=snr)
+    room.simulate(reference_mic=ref_mic_idx, snr=snr)
 else:
     room.simulate()
-    snr="inf"
+    snr = "inf"
 
 """
 Saving and post processing
 """
 # Enregistrement du signal audio reçu par l'antenne :
-name = "IS1000a_TR{:d}_T{:d}_nch{:d}_snr{}_ola{:d}_noise{:d}".format(int(rt60_tgt*1e3),
-                                                                     int(np.ceil(
+name = "IS1000a_T{:d}_nch{:d}_snr{}_ola{:d}_noise{:d}".format(int(np.ceil(
                                                                          total_duration)),
                                                                      int(nb_mic),
                                                                      str(snr),
                                                                      ola_ratio,
                                                                      int(noise_src_fl))
+
+# speakers segments
+segs=list()
+t_start=0.5
+for ii in range (len(doa_src)):
+    segs.append({"speaker": f"spk{ii+1}", "start":t_start , "stop":t_start+len(audio[ii])/fs_audio ,"doa": doa_src[ii]})
+    t_start += len(audio[ii])/fs_audio - overlaps[ii]
+
+with open(output_dir+name+'.pkl','wb') as fh:
+    pickle.dump(segs,fh)
+
 room.mic_array.to_wav(
     f"{output_dir}{name}.wav",
     norm=True,
@@ -205,7 +203,7 @@ room.mic_array.to_wav(
 
 # Amélioration du résultat grâce au beamforming :
 signal_das = mics.process(FD=False)
-signal_das/= np.max(np.abs(signal_das))
+signal_das /= np.max(np.abs(signal_das))
 # Enregistrement du ignal audio reçu par l'antenne :
 name = "BF_"+name
 wavfile.write(filename=f"{output_dir}{name}.wav",
@@ -214,115 +212,10 @@ wavfile.write(filename=f"{output_dir}{name}.wav",
 
 #TODO Création du fichier texte regroupant les données de l'étude du beamforming (en cours...) :
 
-# what is that ?
-#IPython.display.Audio(signal_das, rate=fs)
-# Permet d'afficher la matrice complète
-#np.set_printoptions(threshold=sys.maxsize)
-
-
 # Affiche le nombre de canal du signal ainsi que le nombre d'échantillons
 print(f"Signal shape : {room.mic_array.signals.shape}")
 
 # Mesure du TR60 :
-
 rt60 = room.measure_rt60()
 print("Le TR60 désiré est {}".format(rt60_tgt))  # TR60 choisi
 print("Le TR60 mesuré est {}".format(rt60[1, 0]))  # TR60 mesuré
-
-
-
-
-
-
-
-"""
-# Graphiques :
-
-plt.figure()
-
-# On s'assure qu'il y a bien une différence entre les signaux de chaque microphone :
-
-# Ici on regarde la différence entre le microphone 1 de l'antenne et le cinquième
-tmp = np.sum(room.mic_array.signals[1, :] -
-             room.mic_array.signals[5, :], axis=0)
-tmp /= N
-print(f"Ecart moyen = {tmp}")
-
-
-
-# Cohérence des signaux :
-
-plt.subplot(4, 2, 1)
-cor = plt.cohere(room.mic_array.signals[1, :], room.mic_array.signals[0, :])
-plt.title("Microphone 1")
-plt.xlabel(" ")
-plt.subplot(4, 2, 2)
-cor = plt.cohere(room.mic_array.signals[2, :], room.mic_array.signals[0, :])
-plt.title("Microphone 2")
-plt.xlabel(" ")
-plt.subplot(4, 2, 3)
-cor = plt.cohere(room.mic_array.signals[3, :], room.mic_array.signals[0, :])
-plt.title("Microphone 3")
-plt.xlabel(" ")
-plt.subplot(4, 2, 4)
-cor = plt.cohere(room.mic_array.signals[4, :], room.mic_array.signals[0, :])
-plt.title("Microphone 4")
-plt.xlabel(" ")
-plt.subplot(4, 2, 5)
-cor = plt.cohere(room.mic_array.signals[5, :], room.mic_array.signals[0, :])
-plt.title("Microphone 5")
-plt.xlabel(" ")
-plt.subplot(4, 2, 6)
-cor = plt.cohere(room.mic_array.signals[6, :], room.mic_array.signals[0, :])
-plt.title("Microphone 6")
-plt.xlabel(" ")
-plt.subplot(4, 2, 7)
-cor = plt.cohere(room.mic_array.signals[7, :], room.mic_array.signals[0, :])
-plt.title("Microphone 7")
-plt.xlabel(" ")
-plt.subplot(4, 2, 8)
-cor = plt.cohere(room.mic_array.signals[8, :], room.mic_array.signals[0, :])
-plt.title("Microphone 8")
-plt.xlabel(" ")
-plt.show()
-
-# Signal reçu par chaque microphone :
-
-# On crée un vecteur temps pour pour tracer les signaux en fonction du temps et non en fonction du nombre d'échantillons
-T = np.linspace(0, (N-1)/fs, N)
-plt.subplot(4, 2, 1)
-plt.plot(T, room.mic_array.signals[1, :])
-plt.title("Microphone 1")
-plt.xlabel("Time [s]")
-plt.subplot(4, 2, 2)
-plt.plot(T, room.mic_array.signals[2, :])
-plt.title("Microphone 2")
-plt.xlabel("Time [s]")
-plt.subplot(4, 2, 3)
-plt.plot(T, room.mic_array.signals[3, :])
-plt.title("Microphone 3")
-plt.xlabel("Time [s]")
-plt.subplot(4, 2, 4)
-plt.plot(T, room.mic_array.signals[4, :])
-plt.title("Microphone 4")
-plt.xlabel("Time [s]")
-plt.subplot(4, 2, 5)
-plt.plot(T, room.mic_array.signals[5, :])
-plt.title("Microphone 5")
-plt.xlabel("Time [s]")
-plt.subplot(4, 2, 6)
-plt.plot(T, room.mic_array.signals[6, :])
-plt.title("Microphone 6")
-plt.xlabel("Time [s]")
-plt.subplot(4, 2, 7)
-plt.plot(T, room.mic_array.signals[7, :])
-plt.title("Microphone 7")
-plt.xlabel("Time [s]")
-plt.subplot(4, 2, 8)
-plt.plot(T, room.mic_array.signals[8, :])
-plt.title("Microphone 8")
-plt.xlabel("Time [s]")
-
-plt.tight_layout()
-plt.show()
-"""

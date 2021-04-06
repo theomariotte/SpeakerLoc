@@ -80,6 +80,7 @@ class WaveProcessor:
         else:
             fname = f"{self.wav_dir}{self.audio_names[0]}.wav"
             nfo = soundfile.info(fname)
+            self.duration = nfo.duration
             audio, fs = soundfile.read(fname)
             self.nCh = nfo.channels
 
@@ -168,6 +169,8 @@ class WaveProcessorSlidingWindow(WaveProcessor):
                        win_shift=shift)
 
         self.data_sw = tmp_
+        self.shift = shift
+        self.winlen = winlen
         #self.fs = fs
         #self.isLoaded = True
 
@@ -233,8 +236,12 @@ class WaveProcessorSlidingWindow(WaveProcessor):
     def isLoad(self):
         return self.isLoaded
 
-    def numel(self):
+    def __len__(self):
         return self.data_sw.shape[0]
+
+    def timeSupport(self):
+        N=self.__len__()
+        return np.arange(start=0.0,stop=N*(self.shift),step=self.shift)/self.fs
 
 
 if __name__ == "__main__":
