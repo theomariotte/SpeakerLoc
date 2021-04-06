@@ -126,10 +126,14 @@ for idx in range(len(sig)):
     #theta_plt = theta
 
     plt.polar(theta_plt,doaMap)
-    plt.polar(doa_ref[0]*(np.pi/180.0)-np.pi, 0.1,'o',color='r')
-    plt.polar(doa_ref[1]*(np.pi/180.0)-np.pi, 0.1,'o',color='g')
-    plt.polar(doa_ref[2]*(np.pi/180.0)-np.pi, 0.1,'o',color='b')
-    plt.polar(doa_ref[3]*(np.pi/180.0)-np.pi, 0.1,'o',color='y')
+    if tt[idx] >= segments[0]["start"] and tt[idx] <= segments[0]["stop"]:
+        plt.polar(doa_ref[0]*(np.pi/180.0)-np.pi, 0.1,'o',color='r')
+    if tt[idx] >= segments[1]["start"] and tt[idx] <= segments[1]["stop"]:
+        plt.polar(doa_ref[1]*(np.pi/180.0)-np.pi, 0.1,'o',color='g')    
+    if tt[idx] >= segments[2]["start"] and tt[idx] <= segments[2]["stop"]:
+        plt.polar(doa_ref[2]*(np.pi/180.0)-np.pi, 0.1,'o',color='b')
+    if tt[idx] >= segments[3]["start"] and tt[idx] <= segments[3]["stop"]:
+        plt.polar(doa_ref[3]*(np.pi/180.0)-np.pi, 0.1,'o',color='y')
     plt.xlabel("DOA [°]")
     plt.ylabel("power")
     plt.title(f"Window : {tt[idx]}")
