@@ -125,6 +125,57 @@ class CircularGrid2D(object):
 
         return tdoa,len(self.array)
 
+    # check with the method described in Hadad et Gannot
+    def getRDTF_ULA(self,
+                freq,
+                fs,
+                freq_idx_vec: Optional[None] = None,
+                reference_idx: Optional[int] = 0,
+                c0: Optional[float] = 343.0):
+        """
+        Compute Relative Direct Transfert Function (RDTF) with respect to a reference microphone.
+        If there is N microphones in the array, the output array shape will be (K,N-1) where K is 
+        the number of frequencies to be considered. In fact, relative delay between reference microphone and itself
+        is always null, so the RDTF is 1 for all frequencies. This RDTF is removed to avoid useless computations.
+
+        :param freq: np array containing frequencies where RTF is evaluated [Hz]
+        :param fs: sampling rate [Hz]
+        :param array: microphone array (as MicArray object) 
+        :param freq_idx_vec: array containing indexes of frequency to be used (default None - all frequencies in <freq> are considered)
+        :param reference_idx: reference microphone index for relative delay calculation (default : 0)
+        :param c0: speed of sound in m/s (default: 343.0)
+        """
+
+        # if frequency band is constrained
+        if freq_idx_vec is not None:
+            freq = freq[freq_idx_vec]
+
+        # check Nyquist criterion
+        aliasing = np.where(freq > fs/2)[0]
+        if aliasing.shape[0] > 0:
+            raise Exception("Frequencies should respect Nyquist criterion !!!")
+
+        # normalized frequency (with respect to fs/2)
+        freq_norm = freq/fs*2
+        #inter-microphone distance
+        dist = self.array.getDistance(ref_mic_idx=reference_idx)
+        #tdoa calculation
+        c0=343.0
+        tdoa = 1/c0 * dist[:,np.newaxis].T * np.cos(self.theta)[:,np.newaxis]
+
+        freq_num = freq_norm.shape[0]
+        src_num = self.__len__()
+        mic_num = len(self.array)
+        RDTF = np.zeros((src_num, freq_num,mic_num), dtype=complex)
+
+        # pas propre ça...
+        for isrc in range(src_num):
+            for imic in range(mic_num):
+                jwt = -1j * 2 * np.pi * freq_norm * tdoa[isrc, imic] * fs
+                RDTF[isrc, :, imic] = np.exp(jwt)
+
+        return RDTF
+
     def getRDTF(self,
                 freq,
                 fs,
@@ -238,8 +289,6 @@ class CircularGrid2D(object):
         plt.axis('equal')
         plt.show()
        
-
-
     def __len__(self):
         """
         Length of the grid (i.e. number of sources)
@@ -258,7 +307,7 @@ if __name__ == "__main__":
 
     start = 0
     step = 10
-    stop = 360
+    stop = 180
     r = 1.0
     fs = 16000
     #number of frequencies where to evaluate transfert function
@@ -271,18 +320,18 @@ if __name__ == "__main__":
                           theta_stop=stop,
                           theta_step=step,
                           radius=r)
-    """
+    
     x_vec = np.array([-1,-0.5,0,0.5,1])*1e-2
     #x_vec = np.linspace(-10,10,50)
     y_vec = np.zeros_like(x_vec)
     z_vec = np.ones_like(x_vec)
-    """
     
+    """
     radius = 0.1
     x_vec = radius*np.array([1, 0.0, -1, 0.0])
     y_vec = radius*np.array([0.0, 1, 0.0, -1])
     z_vec = np.zeros(4)
-    
+    """
     mics = np.array([x_vec, y_vec, z_vec]).T
     arr = MicArray(mics)
 
@@ -302,6 +351,15 @@ if __name__ == "__main__":
     rdtf = grid.getRDTF(freq=ff,
                         fs=fs,
                         reference_idx=0)
+    
+    # get rtf for ULA
+    if np.diff(y_vec).sum() == 0:
+        rdtf_ula = grid.getRDTF_ULA(freq=ff,
+                                    fs=fs,
+                                    reference_idx=0)
+
+        err = np.mean((np.abs(rdtf-rdtf_ula)**2))
+        print("Diff betwee RDTF and ULA RDTF : {:1.4e}".format(err))
 
     # get components of the grid (i.e. corrdinates of the sources in each frame)
     tmp = grid.components()
@@ -357,6 +415,19 @@ if __name__ == "__main__":
             plt.ylabel("y")
 
             plt.show(block=True)
+
+    if np.diff(y_vec).sum() == 0:
+        for i in range(len(arr)):
+            fig = plt.figure()
+            plt.title(f"Microphone {i+1} - RDTF ULA phase")
+            #ax.set_ylim(0,Ly)
+            plt.pcolor(T.T, F.T, np.unwrap(
+                np.angle(rdtf_ula[:, :, i]), axis=1), cmap="winter", shading="auto")
+            #plt.pcolor(T.T,F.T,np.angle(rtf[:,:,i]),cmap="winter",shading="auto")
+            plt.ylabel("Frequency [Hz]")
+            plt.xlabel("DOA [deg]")
+            plt.show(block=True)
+
 
     if toplot=="rdtf":
         for i in range(len(arr)):
