@@ -22,14 +22,10 @@ class MicArray:
         Returns the distance between each microphone and the reference one
         """
         d = np.zeros(self.x.shape)
-        idx = 0
         ref_x = self.x[ref_mic_idx]
         ref_y = self.y[ref_mic_idx]
         ref_z = self.z[ref_mic_idx]
         d = np.sqrt( (self.x-ref_x)**2 + (self.y-ref_y)**2 + (self.z-ref_z)**2 )
-        #for x_i,y_i,z_i in zip(self.x,self.y,self.z):
-        #    d[idx] = np.sqrt( (x_i-ref_x)**2 + (y_i-ref_y)**2 + (z_i-ref_z)**2 )
-        #    idx+=1
         return d
 
     def beamformer(self,
@@ -48,7 +44,7 @@ class MicArray:
         :param c0: speed of sound [m/s] (default: 343.0 m/s)
         """
         
-        if  frame.shape[1] == self.micNumber:
+        if  frame.shape[1] == self.__len__():
             frame = frame.T
         
         if src_loc.shape[0] == 2:
@@ -60,7 +56,7 @@ class MicArray:
                 
         # Initialize output signals
         # Signaux décalés correspondant à chaque micro
-        signaux_avances = np.zeros((self.micNumber(), Nb))
+        signaux_avances = np.zeros((self.__len__(), Nb))
         # Signaux en sortie de formation de voies
         t2fin = Nb + 2 * decalage
         t = np.arange(frame.shape[1]) / fs  # a verifier
