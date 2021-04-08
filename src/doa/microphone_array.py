@@ -26,10 +26,10 @@ class MicArray:
         ref_x = self.x[ref_mic_idx]
         ref_y = self.y[ref_mic_idx]
         ref_z = self.z[ref_mic_idx]
-        for x_i,y_i,z_i in zip(self.x,self.y,self.z):
-            d[idx] = np.sqrt( (x_i-ref_x)**2 + (y_i-ref_y)**2 + (z_i-ref_z)**2 )
-            idx+=1
-        
+        d = np.sqrt( (self.x-ref_x)**2 + (self.y-ref_y)**2 + (self.z-ref_z)**2 )
+        #for x_i,y_i,z_i in zip(self.x,self.y,self.z):
+        #    d[idx] = np.sqrt( (x_i-ref_x)**2 + (y_i-ref_y)**2 + (z_i-ref_z)**2 )
+        #    idx+=1
         return d
 
     def beamformer(self,
@@ -92,6 +92,9 @@ class MicArray:
 
         [1] Habets et al. (2008) - Generating nonstationary multisensor signals under a spatial coherence constraint
         """
+        ####
+        #### WARNING TO BE TESTED !!!
+        #### 
 
         # checks
         import matplotlib.pyplot as plt
@@ -104,7 +107,7 @@ class MicArray:
             raise Exception(f"Noise PSD shape mismatch with frequencies. {PSD_nn.shape} instead of {freq_vec.shape}")
         
         # generate random independant noise signals in the STFT domain
-        nbMic = self.micNumber()
+        nbMic = self.__len__()
         nfft = nb_freq * 2 
         Np = np.zeros((nbMic,nb_freq))
         X = copy.deepcopy(Np)
@@ -161,8 +164,8 @@ class MicArray:
         :param c0: speed of sound [m/s] (default : c0=343.0 m/s)
         """
 
-        if ref_mic_idx >= self.micNumber():
-            ref_mic_idx = self.micNumber() - 1
+        if ref_mic_idx >= self.__len__():
+            ref_mic_idx = self.__len__() - 1
         
         dist = self.getDistance(ref_mic_idx=ref_mic_idx)
         tdoa = dist / c0
@@ -186,7 +189,7 @@ class MicArray:
         :param c0: speed of sound in the medium (default = 343 m/s - air at 20°C)
         :param mode: spatial repartition mode (default="sinc" - sinus cardinal)
         """
-        nbMic = self.micNumber()
+        nbMic = self.__len__()
         B = np.empty((nbMic,nbMic))
         fn = freq/fs*2
         if mode == "sinc":
@@ -211,7 +214,7 @@ class MicArray:
         """
         return self.x, self.y, self.z
     
-    def micNumber(self):
+    def __len__(self):
         """
         Returns the number of microphones in the array
         """
@@ -221,27 +224,50 @@ class MicArray:
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    fs = 16000.0
+    fs = 16000
     L = 1024
-    x_vec = np.array([0.,-1.,0.,1.])
-    y_vec = np.array([1.,0.,-1.,0.])
-    z_vec = np.ones(4)
+    #x_vec = np.array([0.,-1.,0.,1.])
+    #y_vec = np.array([1.,0.,-1.,0.])
+    x_vec = np.array([-1,-0.5,0,0.5,1])
+    #x_vec = np.linspace(-10,10,50)
+    y_vec = np.zeros_like(x_vec)
+    z_vec = np.ones_like(x_vec)
     X = np.array([x_vec,y_vec,z_vec]).T
     arr = MicArray(X)
     dist = arr.getDistance(0)
+    delay = arr.getInterMicDelay(fs=fs)
+
     ii=0
     for d in dist:
         logging.critical(f"Dist mic {ii} : {d}")
+        logging.critical(f"Delay mic {ii} : {delay[ii]*1e3} ms")
         ii+=1
 
     B = arr.getSpatialCoherence(freq=100.0,
                                 fs=fs)
+    print("Spatial coherence:")
+    print(B)
+
+    
+    x=np.arange(1,len(arr)+1)
+    y=np.arange(1,len(arr)+1)
+    X,Y=np.meshgrid(x,y)
+    fig=plt.figure()
+    ax = plt.pcolor(X,Y,B)
+    plt.xlabel("Microphone index")
+    plt.ylabel("Microphone index")
+    plt.title('Coherence matrix')
+    plt.xlim([1,len(arr)])
+    plt.ylim([1,len(arr)])
+    plt.axis('equal')
+    
+    plt.show()
 
     x = arr.generateDiffuseNoise(freq_vec=np.linspace(0, fs/2, L),
                                  fs=fs)
 
     N = 2048
-    mic_num = arr.micNumber()
+    mic_num = len(arr)
     plt.figure(num=121)
     for i in range(mic_num):
         plt.subplot(mic_num,1,i+1)
