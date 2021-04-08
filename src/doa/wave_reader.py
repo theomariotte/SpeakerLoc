@@ -110,7 +110,7 @@ class WaveProcessor:
         if not self.isLoaded:
             self.load()
 
-        return self.data[:, int(np.ceil(start*self.fs)):int(np.ceil(stop*self.fs))]
+        return self.data[int(np.ceil(start*self.fs)):int(np.ceil(stop*self.fs)),:]
 
     def getAudioFrameSTFT(self,
                           start,
@@ -125,11 +125,11 @@ class WaveProcessor:
         """
 
         frame = self.getAudioFrame(start, stop)
-        N = frame.shape[1]
+        N = frame.shape[0]
         if nfft is not None:
             if nfft >= N:
-                zp = np.zeros((self.nCh, nfft-N))
-                frame = np.hstack((frame, zp))
+                zp = np.zeros((self.nCh, nfft-N)).T
+                frame = np.vstack((frame, zp))
             elif nfft < N:
                 nfft = N
                 raise Warning(
@@ -137,7 +137,7 @@ class WaveProcessor:
         else:
             nfft = N
 
-        stft = np.fft.fft(frame, axis=1)
+        stft = np.fft.fft(frame, axis=0)
         freq = np.linspace(0, self.fs/2, nfft)
 
         return stft, freq
@@ -164,11 +164,13 @@ class WaveProcessorSlidingWindow(WaveProcessor):
 
         WaveProcessor.load(self)
 
-        tmp_ = framing(sig=self.data,
-                       win_size=winlen,
-                       win_shift=shift)
-
-        self.data_sw = tmp_
+        #tmp_ = framing(sig=self.data,
+        #               win_size=winlen,
+        #               win_shift=shift)
+        tmp_ = np.lib.stride_tricks.sliding_window_view(self.data,
+                                                        window_shape=winlen,
+                                                        axis=0)
+        self.data_sw = tmp_[::shift,:,:]
         self.shift = shift
         self.winlen = winlen
         #self.fs = fs
@@ -212,7 +214,7 @@ class WaveProcessorSlidingWindow(WaveProcessor):
                 "Sliding window computed with default parameters !")
 
         frame = self.getAudioFrame(index=index)
-        N = frame.shape[1]
+        N = frame.shape[0]
         if nfft is not None:
             if nfft > N:
                 zp = np.zeros((self.nCh, nfft-N))
@@ -226,12 +228,9 @@ class WaveProcessorSlidingWindow(WaveProcessor):
         else:
             nfft = N
 
-        stft = np.fft.fft(frame, axis=1)
+        stft = np.fft.fft(frame, axis=0)
 
-        return 2*stft[:, 0:nfft//2+1]/nfft, nfft
-
-    def frameNumber(self):
-        return self.data_sw.shape[0]
+        return 2*stft[0:nfft//2+1,:]/nfft, nfft
 
     def isLoad(self):
         return self.isLoaded
@@ -245,10 +244,13 @@ class WaveProcessorSlidingWindow(WaveProcessor):
 
 
 if __name__ == "__main__":
-    wav_dir = "../../03_DATA/AMI/"
-    audio_names = []
-    for i in range(8):
-        audio_names.append(f"IS1000a.Array1-0{i+1}")
+
+    import matplotlib.pyplot as plt
+
+    wav_dir = "./data/Synth_data/output/CIRC/"
+    audio_names = ["IS1000a_T23_nch8_snrinf_ola1_noise0"]
+#    for i in range(8):
+#        audio_names.append(f"IS1000a.Array1-0{i+1}")
 
     proc = WaveProcessor(wav_dir=wav_dir,
                          audio_names=audio_names)
@@ -266,18 +268,36 @@ if __name__ == "__main__":
     proc2 = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                        audio_names=audio_names)
 
-    winlen = 2048
-    winshift = 1024
-    index = 10
+    winlen = 512
+    winshift = winlen//2
+    index = 100
 
     proc2.load(winlen=winlen, shift=winshift)
 
     fs = proc2.getFs()
     audio = proc2.getAudio()
     frame = proc2.getAudioFrame(index)
-    stft, freq = proc2.getAudioFrameSTFT(index)
+    stft, nfft = proc2.getAudioFrameSTFT(index)
+
+    freq = np.linspace(0,fs/2,nfft//2+1)
 
     print(audio_names)
     print(audio.shape)
     print(frame.shape)
     print(stft.shape)
+
+    plt.figure(num=1)
+    plt.plot(frame)
+    plt.xlabel('samples')
+    plt.ylabel('Amplitude')
+    plt.title('Time')
+    plt.grid()
+    plt.show(block=False)
+
+    plt.figure(num=2)
+    plt.plot(freq,20*np.log10(abs(stft)))
+    plt.xlabel('Frequency [Hz]')
+    plt.ylabel('10*log10(|X|)')
+    plt.title("STFT")
+    plt.grid()
+    plt.show(block=True)

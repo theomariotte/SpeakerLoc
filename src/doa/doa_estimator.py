@@ -30,6 +30,7 @@ class DoaBase():
 
         self.micArray = microphone_array
         self.grid = grid
+        self.grid.addMicArray(self.micArray)
         if not wave_reader.isLoad():
             wave_reader.load(winlen=winlen, winshift=winshift)
         self.waveProc = wave_reader
@@ -56,25 +57,19 @@ class DoaMLE(DoaBase):
         if freq_idx_vec is None:
             freq_idx_vec = range(len(freq))
 
-        num_src = self.grid.shape()[0]
+        num_src = len(self.grid)
         if ref_mic_idx is not None:
             rtf = self.grid.getRDTF(freq=freq,
                                     fs=self.fs,
-                                    array=self.micArray,
                                     reference_idx=ref_mic_idx)
         else:
             rtf = self.grid.getTF(freq=freq,
-                                  fs=self.fs,
-                                  array=self.micArray)
+                                  fs=self.fs)
 
         for idx in tqdm.tqdm(range(idx_frame_start, idx_frame_stop+1), desc="Broad band processing", unit="frame"):
 
             xx, _ = self.waveProc.getAudioFrameSTFT(idx)
-
-            if ref_mic_idx is not None:
-                # remove reference index value if needed
-                xx = np.delete(xx, ref_mic_idx, axis=0)
-
+            
             # Broad band histogram
             H = np.zeros((num_src,))
             k = 0
@@ -138,16 +133,15 @@ class DoaMLE(DoaBase):
                                  freq_index,
                                  ref_mic_idx=None):
 
-        z = np.expand_dims(frame[:, freq_index], axis=1)
+        z = np.expand_dims((frame.T)[:, freq_index], axis=1)
         R = np.dot(z, z.conj().T)
         B = self.micArray.getSpatialCoherence(freq=freq,
                                               fs=self.fs,
-                                              mode="sinc",
-                                              ref_mic_idx=ref_mic_idx)
+                                              mode="sinc")
 
         B_inv = np.linalg.inv(B)
-        mic_num = B.shape[0]
-        src_num = self.grid.shape()[0]
+        mic_num = len(self.micArray)
+        src_num = len(self.grid)
         log_spectrum = np.empty((src_num,))
 
         for ii in range(src_num):
@@ -198,7 +192,7 @@ class DoaDelayAndSumBeamforming(DoaBase):
                   ref_index: Optional[int] = 0,
                   c0: Optional[float] = 343.0):
 
-        Np = self.grid.numel()
+        Np = len(self.grid)
         frame = self.waveProc.getAudioFrame(index=idx_frame)
         coord = self.grid.components()
         X = coord["X"]

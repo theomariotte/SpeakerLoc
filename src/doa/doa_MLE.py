@@ -51,7 +51,7 @@ sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
 
 # wavform framing parameters
-winlen = 2000
+winlen = 2048
 winshift = winlen//2
 
 # number of snapshots for doa estimation (i.e. number of frame)
@@ -62,7 +62,7 @@ num_snapshot = int(duration*16000//winlen)
 
 sig.load(winlen=winlen, shift=winshift)
 fs = sig.getFs()
-num_frame = sig.frameNumber()
+num_frame = len(sig)
 
 # frequency vector
 freq = np.linspace(0.0,fs/2,int(winlen/2))
@@ -97,19 +97,20 @@ grid = CircularGrid2D(theta_start=start,
                       theta_step=step,
                       radius=r)
 
+# add microphone array to the grid to allow RTF computations
+grid.addMicArray(mic_array)
 
 rtf = grid.getRDTF(freq=freq,
                   fs=fs,
-                  array=mic_array,
                   freq_idx_vec=freq_idx_vec,
                   reference_idx=ref_mic_idx)
 
 coord = grid.components()
 theta = coord["theta"]
 theta *= 180. / np.pi
-num_src = grid.shape()[0]
+num_src = len(grid)
 
-
+"""
 # baseline beamforming
 doaBaseline = DoaDelayAndSumBeamforming(microphone_array=mic_array,
                                         grid=grid,
@@ -138,7 +139,7 @@ for idx in range(len(sig)):
     plt.ylabel("power")
     plt.title(f"Window : {tt[idx]}")
     plt.show()
-
+"""
 
 # doa estimator
 doaEngine = DoaMLE(microphone_array=mic_array,

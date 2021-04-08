@@ -359,7 +359,7 @@ if __name__ == "__main__":
                                     reference_idx=0)
 
         err = np.mean((np.abs(rdtf-rdtf_ula)**2))
-        print("Diff betwee RDTF and ULA RDTF : {:1.4e}".format(err))
+        print("Error between RDTF and ULA RDTF : {:1.4e}".format(err))
 
     # get components of the grid (i.e. corrdinates of the sources in each frame)
     tmp = grid.components()
