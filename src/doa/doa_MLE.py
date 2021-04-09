@@ -32,7 +32,7 @@ doa_ref = np.array(doa)
 nb_mic = 8
 ref_mic_idx=0
 
-#in case of Circular array
+#circular array parameters
 theta_start = 0
 theta_stop = 360
 radius = 0.1
@@ -50,7 +50,7 @@ thres = 1.0
 sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
 
-# wavform framing parameters
+# sliding window parameters
 winlen = 2048
 winshift = winlen//2
 
@@ -58,9 +58,9 @@ winshift = winlen//2
 duration = 4.0
 num_snapshot = int(duration*16000//winlen)
 #num_snapshot = int(0.25*duration*16000//winlen)
-#num_snapshot = 10
+num_snapshot = 2
 
-sig.load(winlen=winlen, shift=winshift)
+sig.load(winlen=winlen, shift=winshift, avoid_null=True)
 fs = sig.getFs()
 num_frame = len(sig)
 
@@ -76,7 +76,6 @@ f_start_idx = np.where(tmp_inf == min(tmp_inf))[0]
 f_stop_idx = np.where(tmp_sup == min(tmp_sup))[0]
 freq_idx_vec = np.arange(f_start_idx, f_stop_idx+1).astype(np.int32)
 nb_freq = len(freq_idx_vec)
-
 
 # create circular microphone array
 theta_step = (theta_stop - theta_start)/nb_mic
@@ -157,6 +156,7 @@ for snp_idx in range(nb_loop):
                                      snr_thres=thres,
                                      freq_idx_vec=freq_idx_vec,
                                      ref_mic_idx=ref_mic_idx)
+    doaEngine.time()
 
     ref_src1 = [doa_ref[0],doa_ref[0]]
     #ref_src2 = [doa_ref[1],doa_ref[1]]

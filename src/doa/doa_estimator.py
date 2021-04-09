@@ -1,12 +1,14 @@
 import numpy as np
 import logging
 import matplotlib.pyplot as plt
-import tqdm
 
+import tqdm
 from typing import Optional
 from wave_reader import WaveProcessorSlidingWindow
 from microphone_array import MicArray
 from grid import CircularGrid2D
+
+import time
 
 
 class DoaBase():
@@ -54,9 +56,16 @@ class DoaMLE(DoaBase):
                            freq_idx_vec=None,
                            ref_mic_idx=None):
 
+        self.start_time=[]
+        self.rtf_time=[]
+        self.singleband_time=[]
+        self.loadaudio_time=[]
+
+        
         if freq_idx_vec is None:
             freq_idx_vec = range(len(freq))
-
+        
+        start_time = time.time()
         num_src = len(self.grid)
         if ref_mic_idx is not None:
             rtf = self.grid.getRDTF(freq=freq,
@@ -65,26 +74,32 @@ class DoaMLE(DoaBase):
         else:
             rtf = self.grid.getTF(freq=freq,
                                   fs=self.fs)
+        self.rtf_time.append(time.time()-start_time)
 
+        audioload_time = 0.0
+        singleband_time = 0.0
         for idx in tqdm.tqdm(range(idx_frame_start, idx_frame_stop+1), desc="Broad band processing", unit="frame"):
 
+            tmp = time.time()
             xx, _ = self.waveProc.getAudioFrameSTFT(idx)
-            
+            audioload_time += (time.time() - tmp)
+
             # Broad band histogram
             H = np.zeros((num_src,))
             k = 0
-            sigma_sig = []
-            sigma_nn = []
-            snr_vec = []
+            sigma_sig = np.zeros((len(freq_idx_vec),))
+            sigma_nn = np.zeros_like(sigma_sig)
+            snr_vec = np.zeros_like(sigma_nn)
             for f_idx in freq_idx_vec:
-                log_spectrum, snr, ss2, sv2 = self.singleNarrowBandSpectrum(frame=xx,
+                tmp = time.time()
+                log_spectrum, snr, ss2, sv2 = self._singleNarrowBandSpectrum(frame=xx,
                                                                             rtf=rtf,
                                                                             freq=freq[f_idx],
                                                                             freq_index=f_idx,
                                                                             ref_mic_idx=ref_mic_idx)
-
-                sigma_sig.append(ss2)
-                sigma_nn.append(sv2)
+                singleband_time += (time.time() - tmp)
+                sigma_sig[k]+=ss2
+                sigma_nn[k]+=sv2
 
                 #TODO (21/03/06) temporary remove first value -> problem here !
                 log_spectrum = log_spectrum[1:]
@@ -95,10 +110,9 @@ class DoaMLE(DoaBase):
                 #tmp_.mask[idx_doa_NB] = True
                 qD = log_spectrum[idx_doa_NB] / log_spectrum.sum()
 
-                if qD < 0:
-                    logging.warning("Confidence measure < 0")
-
-                snr_vec.append(snr)
+                #assert qD > 0
+                
+                snr_vec[k]+=snr
 
                 # confidence measure on SNR
                 qSNR = int(snr > snr_thres)
@@ -111,6 +125,10 @@ class DoaMLE(DoaBase):
                 # update histogram
                 H += q_whole * X
                 k += 1
+            
+                self.singleband_time.append(singleband_time/k)
+            self.loadaudio_time.append(audioload_time/(idx_frame_stop-idx_frame_start+1))
+
             """
             fig = plt.figure(num=1)
             ax = fig.add_subplot(111)
@@ -126,7 +144,7 @@ class DoaMLE(DoaBase):
             """
         return H
 
-    def singleNarrowBandSpectrum(self,
+    def _singleNarrowBandSpectrum(self,
                                  frame,
                                  rtf,
                                  freq,
@@ -134,7 +152,7 @@ class DoaMLE(DoaBase):
                                  ref_mic_idx=None):
 
         z = np.expand_dims((frame.T)[:, freq_index], axis=1)
-        R = np.dot(z, z.conj().T)
+        R = z @ z.conj().T
         B = self.micArray.getSpatialCoherence(freq=freq,
                                               fs=self.fs,
                                               mode="sinc")
@@ -153,36 +171,45 @@ class DoaMLE(DoaBase):
             #pseudo inverse of d
             #db = np.dot(B,d)
             #db_inv = np.linalg.pinv(db)
-            tmp_1 = np.dot(d.conj().T, B_inv)
-            tmp_2 = 1.0/(np.dot(d.conj().T, np.dot(B_inv, d)))
+            tmp_1 = d.conj().T @ B_inv
+            tmp_2 = 1.0/(np.matmul(d.conj().T, B_inv @ d))
             db_inv = tmp_2 * tmp_1
             #err_ = np.mean(np.mean(np.abs(db_inv-db_inv_2)**2))
             #db_inv = np.dot(d_inv,B_inv)
 
             # projection of d
-            P = np.dot(d, db_inv)
+            P = np.matmul(d, db_inv)
 
             # orthogonal projection of d
             P_orth = np.eye(mic_num) - P
 
             # Variance of the noise
-            trace = np.trace(np.dot(P_orth, np.dot(R, B_inv)))
+            trace = np.trace( np.matmul(P_orth, R @ B_inv) )
             sigma_v2 = (1/(mic_num-1) * trace).astype(float)
 
             # DSP of the signal
             Sigma_V = sigma_v2 * B
             tmp_ = R - Sigma_V
-            prod_ = np.dot(db_inv, np.dot(tmp_, db_inv.conj().T))
+            prod_ = np.matmul(db_inv, tmp_ @ db_inv.conj().T)
             sigma_s2 = prod_[0][0].astype(float)
 
-            spectrum = np.dot(d, sigma_s2*d.conj().T) + Sigma_V
+            spectrum = np.matmul(d, sigma_s2*d.conj().T) + Sigma_V
             log_spectrum[ii] = np.log(np.linalg.det(spectrum))
 
             # a posteriori SNR for confidence measure when weighting broadband histogram
-            aSNR = (np.dot(z.conj().T, z)/np.trace(Sigma_V)).astype(float)
+            aSNR = (np.matmul(z.conj().T, z)/np.trace(Sigma_V)).astype(float)
 
         return 1./log_spectrum, aSNR[0][0], sigma_s2, sigma_v2
 
+    def time(self):
+
+        self.rtf_time = np.array(self.rtf_time)
+        self.loadaudio_time = np.array(self.loadaudio_time)
+        self.singleband_time = np.array(self.singleband_time)
+
+        print("Mean RTF calculation time : {:1.6f}".format(np.mean(self.rtf_time)))
+        print("Mean audio load time : {:1.6f}".format(np.mean(self.loadaudio_time)))
+        print("Mean narrow band spectrum time : {:1.6f}".format(np.mean(self.singleband_time)))
 
 class DoaDelayAndSumBeamforming(DoaBase):
 

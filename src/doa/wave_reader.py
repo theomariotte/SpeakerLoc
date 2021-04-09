@@ -154,16 +154,19 @@ class WaveProcessorSlidingWindow(WaveProcessor):
 
     def load(self,
              winlen: Optional[int] = 16000,
-             shift: Optional[int] = 16000):
+             shift: Optional[int] = 16000,
+             avoid_null: Optional[bool] = False):
         """
         Load audio file and extract sliding windows from it as a 3-d numpy array
 
         :param winlen: length of the window in samples (default : 16000)
         :param shift: shift of the window in samples (default : 16000 - No overlap)
+        :param avoid_null: add a very low gaussian noise to the signal to avoid null values in the signal
         """
 
         WaveProcessor.load(self)
-
+        if avoid_null:
+            self.data += 1e-6* np.random.randn(self.data.shape[0],self.data.shape[1])
         #tmp_ = framing(sig=self.data,
         #               win_size=winlen,
         #               win_shift=shift)
