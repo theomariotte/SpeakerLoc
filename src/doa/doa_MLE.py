@@ -16,7 +16,7 @@ from doa_estimator import DoaDelayAndSumBeamforming
 
 # Synthetic data
 wav_dir = "./data/Synth_data/output/CIRC/"
-audio_names = ["IS1000a_T23_nch8_snrinf_ola1_noise0"]
+audio_names = ["IS1000a_T23_nch8_snr20_ola1_noise0"]
 
 # open pickle file where segments are stored with doa per speaker
 with open(wav_dir+audio_names[0]+".pkl",'rb') as fh:
@@ -24,7 +24,7 @@ with open(wav_dir+audio_names[0]+".pkl",'rb') as fh:
 
 doa = list()
 for seg in segments:
-    doa.append(seg["doa"])
+    doa.append(seg["doa"]-180)
 
 
 # True DOAs and microphone array parameters
@@ -33,32 +33,32 @@ nb_mic = 8
 ref_mic_idx=0
 
 #circular array parameters
-theta_start = 0
-theta_stop = 360
+theta_start = -180
+theta_stop = 180
 radius = 0.1
 
 # circular grid parameters
-start = 0
+start = -180
 step = 5
-stop = 360
+stop = 180
 r = 1
 
 # confidence measure threshold
-thres = 1.0
+thres = 0.5
 
 # wave reader instance
 sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
                                  audio_names=audio_names)
 
 # sliding window parameters
-winlen = 2048
-winshift = winlen//2
+winlen = 512
+winshift = winlen
 
 # number of snapshots for doa estimation (i.e. number of frame)
 duration = 4.0
 num_snapshot = int(duration*16000//winlen)
 #num_snapshot = int(0.25*duration*16000//winlen)
-num_snapshot = 2
+num_snapshot = 100
 
 sig.load(winlen=winlen, shift=winshift, avoid_null=True)
 fs = sig.getFs()
@@ -157,11 +157,6 @@ for snp_idx in range(nb_loop):
                                      freq_idx_vec=freq_idx_vec,
                                      ref_mic_idx=ref_mic_idx)
     doaEngine.time()
-
-    ref_src1 = [doa_ref[0],doa_ref[0]]
-    #ref_src2 = [doa_ref[1],doa_ref[1]]
-    #ref_src3 = [doa_ref[2],doa_ref[2]]
-    #ref_src4 = [doa_ref[3],doa_ref[3]]
     
     fig = plt.figure()
     ax = fig.add_subplot(111)

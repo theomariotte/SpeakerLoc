@@ -54,7 +54,8 @@ class DoaMLE(DoaBase):
                            freq,
                            snr_thres=1.0,
                            freq_idx_vec=None,
-                           ref_mic_idx=None):
+                           ref_mic_idx=None,
+                           keep_trace=False):
 
         self.start_time=[]
         self.rtf_time=[]
@@ -78,7 +79,16 @@ class DoaMLE(DoaBase):
 
         audioload_time = 0.0
         singleband_time = 0.0
-        for idx in tqdm.tqdm(range(idx_frame_start, idx_frame_stop+1), desc="Broad band processing", unit="frame"):
+        
+        # to plot
+        if keep_trace:
+            self.sigma_sig = np.zeros((len(freq_idx_vec),idx_frame_stop-idx_frame_start)).T
+            self.sigma_nn = np.zeros_like(self.sigma_sig)
+            self.snr_vec = np.zeros_like(self.sigma_sig)
+            self.ground_truth = np.zeros_like(self.sigma_sig)
+        tt = 0
+
+        for idx in tqdm.tqdm(range(idx_frame_start, idx_frame_stop), desc="Broad band processing", unit="frame"):
 
             tmp = time.time()
             xx, _ = self.waveProc.getAudioFrameSTFT(idx)
@@ -87,9 +97,8 @@ class DoaMLE(DoaBase):
             # Broad band histogram
             H = np.zeros((num_src,))
             k = 0
-            sigma_sig = np.zeros((len(freq_idx_vec),))
-            sigma_nn = np.zeros_like(sigma_sig)
-            snr_vec = np.zeros_like(sigma_nn)
+            if keep_trace:
+                self.ground_truth[tt,:] += np.squeeze(np.abs(xx[freq_idx_vec,0])**2)
             for f_idx in freq_idx_vec:
                 tmp = time.time()
                 log_spectrum, snr, ss2, sv2 = self._singleNarrowBandSpectrum(frame=xx,
@@ -98,8 +107,6 @@ class DoaMLE(DoaBase):
                                                                             freq_index=f_idx,
                                                                             ref_mic_idx=ref_mic_idx)
                 singleband_time += (time.time() - tmp)
-                sigma_sig[k]+=ss2
-                sigma_nn[k]+=sv2
 
                 #TODO (21/03/06) temporary remove first value -> problem here !
                 log_spectrum = log_spectrum[1:]
@@ -111,8 +118,10 @@ class DoaMLE(DoaBase):
                 qD = log_spectrum[idx_doa_NB] / log_spectrum.sum()
 
                 #assert qD > 0
-                
-                snr_vec[k]+=snr
+                if keep_trace: 
+                    self.sigma_sig[tt,k]+=ss2
+                    self.sigma_nn[tt,k]+=sv2
+                    self.snr_vec[tt,k]+=snr
 
                 # confidence measure on SNR
                 qSNR = int(snr > snr_thres)
@@ -125,24 +134,67 @@ class DoaMLE(DoaBase):
                 # update histogram
                 H += q_whole * X
                 k += 1
-            
-                self.singleband_time.append(singleband_time/k)
-            self.loadaudio_time.append(audioload_time/(idx_frame_stop-idx_frame_start+1))
 
-            """
-            fig = plt.figure(num=1)
-            ax = fig.add_subplot(111)
-            plt.plot(freq[freq_idx_vec],snr_vec)
-            plt.show()
+                self.singleband_time.append(singleband_time/k)
+            tt+=1
+            self.loadaudio_time.append(audioload_time/(idx_frame_stop-idx_frame_start+1))
+        if keep_trace:
+            self.display(idx_frame_start,idx_frame_stop,freq_idx_vec,freq,slice_time=[0,int((idx_frame_stop-idx_frame_start)/2),int(idx_frame_stop-idx_frame_start)-1])
             
-            
-            plt.figure()
-            plt.plot(freq[freq_idx_vec],sigma_sig)#,freq[freq_idx_vec],sigma_nn,'r')
-            #plt.legend("Signal DSP", "Noise DSP")
-            plt.grid()
-            plt.show()
-            """
         return H
+
+    def display(self,
+                idx_frame_start,
+                idx_frame_stop,
+                freq_idx_vec,
+                freq,
+                slice_time=None):
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        idx_ = np.arange(idx_frame_start,idx_frame_stop)
+        ff_ = freq[freq_idx_vec]
+        T,F = np.meshgrid(idx_,ff_)
+        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.sigma_sig)))
+        plt.xlabel('Time [samples]')
+        plt.ylabel('Frequency [Hz')
+        plt.title("Signal PSD")
+        plt.colorbar(label="dB")
+        
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.sigma_nn)))
+        plt.xlabel('Time [samples]')
+        plt.ylabel('Frequency [Hz')
+        plt.title("Noise PSD")
+        plt.colorbar(label="dB")
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.snr_vec)))
+        plt.xlabel('Time [samples]')
+        plt.ylabel('Frequency [Hz')
+        plt.title("SNR")
+        plt.colorbar(label="dB")
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.ground_truth)))
+        plt.xlabel('Time [samples]')
+        plt.ylabel('Frequency [Hz')
+        plt.title("Signal spectrogram")
+        plt.colorbar(label="dB")
+
+        if slice_time:
+            fig=plt.figure()
+            for slc in range(len(slice_time)):
+                fig.add_subplot(len(slice_time),1,slc+1)
+                plt.plot(ff_,10*np.log10(np.abs(self.sigma_sig[slice_time[slc],:])),linewidth=2,label="signal")
+                plt.plot(ff_,10*np.log10(np.abs(self.sigma_nn[slice_time[slc],:])),linewidth=2,label="noise")
+                plt.grid()
+                plt.ylabel("DSP t={}".format(slice_time[slc]))
+                plt.legend()
+        plt.show()
 
     def _singleNarrowBandSpectrum(self,
                                  frame,
@@ -155,7 +207,7 @@ class DoaMLE(DoaBase):
         R = z @ z.conj().T
         B = self.micArray.getSpatialCoherence(freq=freq,
                                               fs=self.fs,
-                                              mode="sinc")
+                                              mode="identity")
 
         B_inv = np.linalg.inv(B)
         mic_num = len(self.micArray)
@@ -189,8 +241,7 @@ class DoaMLE(DoaBase):
 
             # DSP of the signal
             Sigma_V = sigma_v2 * B
-            tmp_ = R - Sigma_V
-            prod_ = np.matmul(db_inv, tmp_ @ db_inv.conj().T)
+            prod_ = np.matmul(db_inv, (R - Sigma_V) @ db_inv.conj().T)
             sigma_s2 = prod_[0][0].astype(float)
 
             spectrum = np.matmul(d, sigma_s2*d.conj().T) + Sigma_V

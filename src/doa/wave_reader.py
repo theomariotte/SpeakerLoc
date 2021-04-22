@@ -233,7 +233,8 @@ class WaveProcessorSlidingWindow(WaveProcessor):
 
         stft = np.fft.fft(frame, axis=0)
 
-        return 2*stft[0:nfft//2+1,:]/nfft, nfft
+        #return 2*stft[0:nfft//2+1,:]/nfft, nfft
+        return stft[0:nfft//2+1,:], nfft
 
     def isLoad(self):
         return self.isLoaded

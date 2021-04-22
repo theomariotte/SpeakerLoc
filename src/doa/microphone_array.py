@@ -186,9 +186,12 @@ class MicArray:
         :param mode: spatial repartition mode (default="sinc" - sinus cardinal)
         """
         nbMic = self.__len__()
-        B = np.empty((nbMic,nbMic))
-        fn = freq/fs*2
-        if mode == "sinc":
+
+        if mode == "identity":
+            B = np.eye(nbMic)
+        elif mode == "sinc":
+            B = np.empty((nbMic,nbMic))
+            fn = freq/fs*2
             for ii in range(nbMic):
                 for jj in range(nbMic):
                     d_ij = np.sqrt(
