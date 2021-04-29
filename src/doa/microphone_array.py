@@ -168,8 +168,6 @@ class MicArray:
 
         return tdoa
 
-
-
     def getSpatialCoherence(self,
                             freq,
                             fs,

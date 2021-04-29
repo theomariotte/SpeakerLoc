@@ -1,7 +1,6 @@
 import numpy as np
 import soundfile
 import copy
-
 from typing import Optional
 
 
@@ -151,7 +150,6 @@ class WaveProcessorSlidingWindow(WaveProcessor):
     Process audio file by exracting sliding windows
     The load method from WaveProcessor is overridden to allow windows extractions
     """
-
     def load(self,
              winlen: Optional[int] = 16000,
              shift: Optional[int] = 16000,

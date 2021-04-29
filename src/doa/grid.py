@@ -23,7 +23,7 @@ class Grid2D(object):
         super(Grid2D, self).__init__()
         if not len(x_loc) == len(y_loc):
             raise Exception(
-                "<x_loc> and <y_loc> parameters should be the same dimensions !!!")
+                "<x_loc> and <y_loc> parameters should have the same dimensions !!!")
 
         self.X, self.Y = np.meshgrid(x_loc, y_loc)
 
@@ -305,7 +305,7 @@ class CircularGrid2D(object):
 
 if __name__ == "__main__":
 
-    start = 0
+    start =0 
     step = 10
     stop = 180
     r = 1.0

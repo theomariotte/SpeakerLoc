@@ -1,11 +1,3 @@
-# VIBERT Samuel & OUAKAN Mohamed
-# 5A VA-alt
-# Projet 5A : AMÉLIORATION DE LA TRANSCRIPTION DE RÉUNION PAR LOCALISATION DE LOCUTEUR
-# Simulation avec des échantillons de la réunion. Ici, les 4 fichiers audios (headset) représentent quelques secondes de chaque locuteur
-# Le 5ème fichier représente le bruit de fond
-
-########################################################################################################################
-
 import numpy as np
 import matplotlib.pyplot as plt
 import pyroomacoustics as pra
@@ -15,15 +7,23 @@ import sys
 import os
 import wave
 import scipy.signal as dsp
+import pyroomacoustics.datasets.cmu_arctic as dataset 
+
 
 """
 Parameters
 """
 ### Repositories
-# Where source signals are stored
-input_dir = "data/Synth_data/input/"
+dataset="cmu"
+# CMU ARCTIC dataset
+base_dir = "data/Synth_data/input/CMU/"
+spk_list = [
+    {"cluster":"aew","sentence":1},
+    {"cluster":"axb","sentence":55},
+]
 # Where simulation results are stored
 output_dir = "data/Synth_data/output/ULA/"
+
 
 ### Simulation parameters
 # Target sampling rate [Hz] (resampling if needed)
@@ -47,7 +47,6 @@ overlap_list = [1.0,4.0,2.0]
 src_dist = 1.
 
 ### microphone array properties
-
 nb_mic = 4
 x_start = -0.1
 x_stop = 0.1
@@ -65,8 +64,6 @@ overlaps[:-1] += np.array(overlap_list)
 Simulation
 """
 # check directories
-if not os.path.exists(input_dir):
-    os.mkdir(input_dir)
 if not os.path.exists(output_dir):
     os.mkdir(output_dir)
 
@@ -76,7 +73,10 @@ doa_src = np.array(doa_src,dtype=np.float)
 i=0
 audio = []
 while i < nb_src:
-    fs_audio, sig = wavfile.read(f"{input_dir}is1000a_Headset {i}_mono.wav")
+    audio_name = "{}cmu_us_{}_arctic/wav/arctic_a{:04d}.wav".format(base_dir,
+                                                                  spk_list[i]["cluster"],
+                                                                  spk_list[i]["sentence"])
+    fs_audio, sig = wavfile.read(audio_name)
 
     # adjust sampling rate if audio does not fit targeted one
     if fs_audio > fs:
@@ -99,7 +99,7 @@ room = pra.ShoeBox(room_dim,
 # Source positions
 doa_src*=np.pi/180.
 srcpnts = np.zeros((nb_src, 2))
-start = 0.5
+start = 0.1
 for i, doa in enumerate(doa_src):
 
     # cartesian coordinates
@@ -173,13 +173,25 @@ else:
 Saving and post processing
 """
 # Enregistrement du signal audio reçu par l'antenne :
-name = "IS1000a_TR{:d}_T{:d}_nch{:d}_snr{}_ola{:d}_noise{:d}".format(int(rt60_tgt*1e3),
-                                                                     int(np.ceil(
-                                                                         total_duration)),
-                                                                     int(nb_mic),
-                                                                     str(snr),
-                                                                     ola_ratio,
-                                                                     int(noise_src_fl))
+if dataset == "ami":
+    name = "IS1000a_TR{:d}_T{:d}_nch{:d}_snr{}_ola{:d}_noise{:d}".format(int(rt60_tgt*1e3),
+                                                                        int(np.ceil(
+                                                                            total_duration)),
+                                                                        int(nb_mic),
+                                                                        str(snr),
+                                                                        ola_ratio,
+                                                                        int(noise_src_fl))
+elif dataset == "cmu":
+    name = "{}{}_TR{:d}_T{:d}_nch{:d}_snr{}_ola{:d}_noise{:d}".format(spk_list[0]["cluster"],
+                                                                        spk_list[1]["cluster"],
+                                                                        int(rt60_tgt*1e3),
+                                                                        int(np.ceil(
+                                                                            total_duration)),
+                                                                        int(nb_mic),
+                                                                        str(snr),
+                                                                        ola_ratio,
+                                                                        int(noise_src_fl))
+
 room.mic_array.to_wav(
     f"{output_dir}{name}.wav",
     norm=True,

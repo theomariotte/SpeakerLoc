@@ -52,23 +52,23 @@ sig = WaveProcessorSlidingWindow(wav_dir=wav_dir,
 winlen = 512
 winshift = winlen//2
 
-# number of snapshots for doa estimation (i.e. number of frame)
-duration = 4.0
-num_snapshot = int(duration*16000//winlen)
-num_snapshot=len(sig)
-#num_snapshot = int(0.25*duration*16000//winlen)
-#num_snapshot = 50
-
 sig.load(winlen=winlen, shift=winshift)
 fs = sig.getFs()
 num_frame = len(sig) 
+
+# number of snapshots for doa estimation (i.e. number of frame)
+duration = 4.0
+num_snapshot = int(duration*16000//winlen)
+#num_snapshot=num_frame//4
+#num_snapshot = int(0.25*duration*16000//winlen)
+#num_snapshot = 100
 
 # frequency vector
 freq = np.linspace(0.0,fs/2,int(winlen/2))
 
 # Frequency band to be studied
 fmin = 100
-fmax = fs/2
+fmax = 8000
 tmp_inf = np.abs(freq-fmin)
 tmp_sup = np.abs(freq-fmax)
 f_start_idx = np.where(tmp_inf == min(tmp_inf))[0]
@@ -94,6 +94,7 @@ grid = CircularGrid2D(theta_start=start,
                       radius=r)
 
 grid.addMicArray(mic_array)
+grid.display()
 
 rtf = grid.getRDTF(freq=freq,
                   fs=fs,

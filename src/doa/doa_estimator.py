@@ -155,7 +155,7 @@ class DoaMLE(DoaBase):
         idx_ = np.arange(idx_frame_start,idx_frame_stop)
         ff_ = freq[freq_idx_vec]
         T,F = np.meshgrid(idx_,ff_)
-        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.sigma_sig)))
+        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.sigma_sig)),cmap="magma")
         plt.xlabel('Time [samples]')
         plt.ylabel('Frequency [Hz')
         plt.title("Signal PSD")
@@ -163,7 +163,7 @@ class DoaMLE(DoaBase):
         
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.sigma_nn)))
+        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.sigma_nn)),cmap="magma")
         plt.xlabel('Time [samples]')
         plt.ylabel('Frequency [Hz')
         plt.title("Noise PSD")
@@ -171,7 +171,7 @@ class DoaMLE(DoaBase):
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.snr_vec)))
+        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.snr_vec)),cmap="magma")
         plt.xlabel('Time [samples]')
         plt.ylabel('Frequency [Hz')
         plt.title("SNR")
@@ -179,7 +179,7 @@ class DoaMLE(DoaBase):
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.ground_truth)))
+        plt.pcolor(T.T,F.T,10*np.log10(np.abs(self.ground_truth)),cmap="magma")
         plt.xlabel('Time [samples]')
         plt.ylabel('Frequency [Hz')
         plt.title("Signal spectrogram")
@@ -244,8 +244,9 @@ class DoaMLE(DoaBase):
             prod_ = np.matmul(db_inv, (R - Sigma_V) @ db_inv.conj().T)
             sigma_s2 = prod_[0][0].astype(float)
 
-            spectrum = np.matmul(d, sigma_s2*d.conj().T) + Sigma_V
-            log_spectrum[ii] = np.log(np.linalg.det(spectrum))
+            #spectrum = np.matmul(d, sigma_s2*d.conj().T) + Sigma_V
+            #log_spectrum[ii] = np.log(np.linalg.det(spectrum))
+            log_spectrum[ii] = sigma_s2
 
             # a posteriori SNR for confidence measure when weighting broadband histogram
             aSNR = (np.matmul(z.conj().T, z)/np.trace(Sigma_V)).astype(float)
